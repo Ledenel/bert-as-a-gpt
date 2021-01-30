@@ -54,9 +54,10 @@ with torch.no_grad():
         df_logits = mask_token_logits.detach().numpy()
         df_stats = pd.DataFrame(
             words_score(origin=sequence_input[0])
+            + words_score(masked=masked_input[0])
             + words_score(max=list(np.argmin(df_logits, axis=1)))
         ).T
-        st.write(df_stats)
+        st.dataframe(df_stats.style.format("{:.5}"))
         # st.plotly_chart(go.Figure(data=go.Heatmap(z=df_logits)))
         
         # st.line_chart({
