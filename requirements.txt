@@ -1,0 +1,10 @@
+torch
+transformers
+zhou
+pypinyin
+pandas
+numpy
+plotly
+jupyter
+streamlit
+

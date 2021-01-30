@@ -1,4 +1,3 @@
-from altair.vegalite.v4.api import sequence
 from transformers import AutoModelWithLMHead, AutoTokenizer
 import os
 import torch
@@ -32,9 +31,9 @@ sequence = st.text_input("Sentence", value=f"生活的真谛是美")
 import matplotlib.pyplot as plt
 
 
-def words_score(**kwargs):
+def words_score(logits, **kwargs):
     key, actual_words = list(kwargs.items())[0]
-    origin = pd.Series(df_logits[(range(len(actual_words)), actual_words)], name=f"{key}")
+    origin = pd.Series(logits[(range(len(actual_words)), actual_words)], name=f"{key}")
     origin_words = pd.Series(tokenizer.convert_ids_to_tokens(actual_words), name=f"{key}_words")
     return origin, origin_words
 
@@ -51,13 +50,18 @@ with torch.no_grad():
         print(token_logits[0, :, :].shape)
         mask_token_logits = -log_softmax(token_logits[0, :, :], dim=1)
         print(mask_token_logits.shape)
-        df_logits = mask_token_logits.detach().numpy()
+        logits = mask_token_logits.detach().numpy()
+        df_logits = pd.DataFrame(logits)
+        s = pd.Series(tokenizer.vocab)
+        r2 = pd.Series(s.index.values, index=s.values, name="word")
+        df_logits = df_logits.T.join(r2)
+        st.dataframe(df_logits.describe().T)
         df_stats = pd.DataFrame(
-            words_score(origin=sequence_input[0])
-            + words_score(masked=masked_input[0])
-            + words_score(max=list(np.argmin(df_logits, axis=1)))
+            words_score(logits, origin=sequence_input[0])
+            + words_score(logits, masked=masked_input[0])
+            + words_score(logits, max=list(np.argmin(logits, axis=1)))
         ).T
-        st.dataframe(df_stats.style.format("{:.5}"))
+        st.dataframe(df_stats.style.format("{:.4}"))
         # st.plotly_chart(go.Figure(data=go.Heatmap(z=df_logits)))
         
         # st.line_chart({
