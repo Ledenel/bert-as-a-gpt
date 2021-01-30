@@ -31,8 +31,16 @@ sequence = st.text_input("Sentence", value=f"生活的真谛是美")
 
 import matplotlib.pyplot as plt
 
+
+def words_score(**kwargs):
+    key, actual_words = list(kwargs.items())[0]
+    origin = pd.Series(df_logits[(range(len(actual_words)), actual_words)], name=f"{key}")
+    origin_words = pd.Series(tokenizer.convert_ids_to_tokens(actual_words), name=f"{key}_words")
+    return origin, origin_words
+
 with torch.no_grad():
     sequence_input = tokenizer.encode(sequence, return_tensors="pt")
+    
     mask_token_index, real_token = list(enumerate(sequence_input[0]))[1]
     if tokenizer.convert_ids_to_tokens([real_token])[0] not in tokenizer.all_special_tokens:
         masked_input = sequence_input.clone()
@@ -44,10 +52,11 @@ with torch.no_grad():
         mask_token_logits = -log_softmax(token_logits[0, :, :], dim=1)
         print(mask_token_logits.shape)
         df_logits = mask_token_logits.detach().numpy()
-        actual_words = sequence_input[0][1:-1]
-        df_logits = df_logits.T[actual_words].T
-        df_logits = pd.DataFrame(df_logits, columns=tokenizer.convert_ids_to_tokens(actual_words))
-        st.write(df_logits)
+        df_stats = pd.DataFrame(
+            words_score(origin=sequence_input[0])
+            + words_score(max=list(np.argmin(df_logits, axis=1)))
+        ).T
+        st.write(df_stats)
         # st.plotly_chart(go.Figure(data=go.Heatmap(z=df_logits)))
         
         # st.line_chart({
