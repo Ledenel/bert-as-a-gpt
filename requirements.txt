@@ -7,4 +7,4 @@ numpy
 plotly
 jupyter
 streamlit
-
+xarray
