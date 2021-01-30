@@ -55,7 +55,7 @@ with torch.no_grad():
         s = pd.Series(tokenizer.vocab)
         r2 = pd.Series(s.index.values, index=s.values, name="word")
         df_logits = df_logits.T.join(r2)
-        st.dataframe(df_logits.describe().T)
+        st.dataframe(df_logits.describe().T.style.background_gradient())
         df_stats = pd.DataFrame(
             words_score(logits, origin=sequence_input[0])
             + words_score(logits, masked=masked_input[0])
