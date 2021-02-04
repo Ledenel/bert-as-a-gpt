@@ -49,25 +49,22 @@ def word_embeddings(tokenizer: AutoTokenizer, model: AutoModelWithLMHead):
     st.text(pprint.pformat(last_emb_layer))
 
     return None
-    
+
+def embedding_series(first_emb_layer, name):
+    first_layer_map = pd.Series(list(first_emb_layer.detach().numpy()), index=id_to_word, name=name)
+    return first_layer_map
 
 with torch.no_grad():
     s = pd.Series(tokenizer.vocab)
     id_to_word = pd.Series(s.index.values, index=s.values, name="word")
     id_to_word.sort_index(inplace=True)
     assert id_to_word.index[-1] == len(id_to_word.unique()) - 1
-    first_emb_layer = model.bert.embeddings.word_embeddings.weight
-    st.text(pprint.pformat(first_emb_layer.shape))
-    last_emb_layer = model.cls.predictions.decoder
-    bias_layer = last_emb_layer.bias
-    last_emb_layer = last_emb_layer.weight
-    st.text(pprint.pformat(last_emb_layer))
-    first_layer_map = pd.Series(list(first_emb_layer.detach().numpy()), index=id_to_word, name="first_emb")
-    last_layer_map = pd.Series(list(last_emb_layer.detach().numpy()), index=id_to_word, name="last_emb")
-    bias_map = pd.Series(bias_layer.detach().numpy(), index=id_to_word, name="bias_value")
+    first_layer_map = embedding_series(model.bert.embeddings.word_embeddings.weight, "first_emb")
+    last_layer_map = embedding_series(model.cls.predictions.decoder.weight, "last_emb")
+    bias_map = embedding_series(model.cls.predictions.decoder.bias, "last_bias")    
     st.write(first_layer_map[list("生活的真谛是爱")])
     st.write(last_layer_map[list("生活的真谛是爱")])
-    st.write((first_layer_map-last_layer_map).apply(lambda x:np.sqrt(np.sum(x**2)))[list("生活的真谛是爱")])
+    st.write((first_layer_map-last_layer_map).apply(lambda x:np.sum(x))[list("生活的真谛是爱")])
     st.write(bias_map[list("生活的真谛是爱")])
     
     sequence_input = tokenizer.encode(sequence, return_tensors="pt")
