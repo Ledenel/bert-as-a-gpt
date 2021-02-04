@@ -38,10 +38,13 @@ def words_score(logits, **kwargs):
     origin_words = pd.Series(tokenizer.convert_ids_to_tokens(actual_words), name=f"{key}_words")
     return origin, origin_words
 
-def word_embeddings(tokenizer: AutoTokenizer, model: AutoModelWithLMHead):
+def tokenizer_id_array(tokenizer):
     s = pd.Series(tokenizer.vocab)
     id_to_word = pd.Series(s.index.values, index=s.values, name="word")
     id_to_word.sort_index(inplace=True)
+
+def word_embeddings(tokenizer: AutoTokenizer, model: AutoModelWithLMHead):
+    id_to_word = tokenizer_id_array(tokenizer)
     assert id_to_word.unique()[-1] == len(id_to_word) - 1
     first_emb_layer = model.bert.embeddings.word_embeddings
     st.text(pprint.pformat(first_emb_layer))
@@ -50,22 +53,38 @@ def word_embeddings(tokenizer: AutoTokenizer, model: AutoModelWithLMHead):
 
     return None
 
-def embedding_series(first_emb_layer, name):
-    first_layer_map = pd.Series(list(first_emb_layer.detach().numpy()), index=id_to_word, name=name)
+def embedding_series(tokenizer, tensor, name):
+    first_layer_map = pd.Series(list(tensor.detach().numpy()), index=tokenizer_id_array(tokenizer), name=name)
     return first_layer_map
+
+def encoded_embs(tokenizer, model, sequence):
+    sequence_input = tokenizer.encode(sequence, return_tensors="pt")
+    tokenzied_inputs = tokenizer.convert_ids_to_tokens(sequence_input[0])
+    token_output_states, *_ = model(sequence_input, output_hidden_states=True).hidden_states
+    return pd.Series(list(token_output_states.squeeze().detach().numpy()), index=tokenzied_inputs)
+
+"""
+class BertLMPredictionHead(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.transform = BertPredictionHeadTransform(config)
+        # The output weights are the same as the input embeddings, but there is
+        # an output-only bias for each token.
+        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+"""
 
 with torch.no_grad():
     s = pd.Series(tokenizer.vocab)
     id_to_word = pd.Series(s.index.values, index=s.values, name="word")
     id_to_word.sort_index(inplace=True)
     assert id_to_word.index[-1] == len(id_to_word.unique()) - 1
-    first_layer_map = embedding_series(model.bert.embeddings.word_embeddings.weight, "first_emb")
-    last_layer_map = embedding_series(model.cls.predictions.decoder.weight, "last_emb")
-    bias_map = embedding_series(model.cls.predictions.decoder.bias, "last_bias")    
-    st.write(first_layer_map[list("生活的真谛是爱")])
-    st.write(last_layer_map[list("生活的真谛是爱")])
-    st.write((first_layer_map-last_layer_map).apply(lambda x:np.sum(x))[list("生活的真谛是爱")])
-    st.write(bias_map[list("生活的真谛是爱")])
+    first_layer_map = embedding_series(tokenizer, model.bert.embeddings.word_embeddings.weight, "first_emb")
+    last_layer_map = embedding_series(tokenizer, model.cls.predictions.decoder.weight, "last_emb")
+    bias_map = embedding_series(tokenizer, model.cls.predictions.decoder.bias, "last_bias") 
+    # st.write(first_layer_map[list("生活的真谛是爱")])
+    # st.write(last_layer_map[list("生活的真谛是爱")])
+    # st.write(bias_map[list("生活的真谛是爱")])
+    st.write(encoded_embs(tokenizer, model, sequence))
     
     sequence_input = tokenizer.encode(sequence, return_tensors="pt")
     mask_token_index, real_token = list(enumerate(sequence_input[0]))[1]
