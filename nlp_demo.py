@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from torch.nn.functional import log_softmax
+from transformers.utils.dummy_pt_objects import AutoModel
 
 config_dict = dict(
     cache_dir="cache",
@@ -37,9 +38,22 @@ def words_score(logits, **kwargs):
     origin_words = pd.Series(tokenizer.convert_ids_to_tokens(actual_words), name=f"{key}_words")
     return origin, origin_words
 
-with torch.no_grad():
-    sequence_input = tokenizer.encode(sequence, return_tensors="pt")
+def word_embeddings(tokenizer: AutoTokenizer, model: AutoModelWithLMHead):
+    s = pd.Series(tokenizer.vocab)
+    id_to_word = pd.Series(s.index.values, index=s.values, name="word")
+    id_to_word.sort_index(inplace=True)
+    assert id_to_word.unique()[-1] == len(id_to_word) - 1
+    # first_emb_layer = model.
+    return None
     
+
+with torch.no_grad():
+    first_emb_layer = model.bert.embeddings.word_embeddings
+    st.text(pprint.pformat(first_emb_layer))
+    last_emb_layer = model.cls.predictions.decoder
+    st.text(pprint.pformat(last_emb_layer))
+    
+    sequence_input = tokenizer.encode(sequence, return_tensors="pt")
     mask_token_index, real_token = list(enumerate(sequence_input[0]))[1]
     if tokenizer.convert_ids_to_tokens([real_token])[0] not in tokenizer.all_special_tokens:
         masked_input = sequence_input.clone()

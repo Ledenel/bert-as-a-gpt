@@ -9,3 +9,4 @@ jupyter
 streamlit
 xarray
 networkx
+h5py
