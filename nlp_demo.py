@@ -65,8 +65,9 @@ with torch.no_grad():
     first_layer_map = pd.Series(list(first_emb_layer.detach().numpy()), index=id_to_word, name="first_emb")
     last_layer_map = pd.Series(list(last_emb_layer.detach().numpy()), index=id_to_word, name="last_emb")
     bias_map = pd.Series(bias_layer.detach().numpy(), index=id_to_word, name="bias_value")
-    st.write(first_layer_map.head())
-    st.write(last_layer_map.head())
+    st.write(first_layer_map[list("生活的真谛是爱")])
+    st.write(last_layer_map[list("生活的真谛是爱")])
+    st.write((first_layer_map-last_layer_map).apply(lambda x:np.sqrt(np.sum(x**2)))[list("生活的真谛是爱")])
     st.write(bias_map[list("生活的真谛是爱")])
     
     sequence_input = tokenizer.encode(sequence, return_tensors="pt")
