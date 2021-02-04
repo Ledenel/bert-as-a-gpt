@@ -101,7 +101,8 @@ def distance(left, right):
         # print(np.max(diff), np.min(diff))
         # print(np.abs(left_vec - right_vec))
         # return np.max(np.abs(left_vec - right_vec))
-        return np.sum((left_vec - right_vec) ** 2) ** 0.5
+        # return np.sum((left_vec - right_vec) ** 2) ** 0.5
+        return np.dot(left_vec, right_vec)
     else:
         return 0
 
@@ -129,7 +130,7 @@ if __name__ == "__main__":
             for lid, left in enumerate(lefts):
                 for rid, right in enumerate(rights):
                     v = distance(left, right)
-                    st.write(f"{left} -> {right} {v}")
+                    # st.write(f"{left} -> {right} {v}")
                     G.add_edge((gid, lid, left), (gid+1, rid, right), distance=v)
         st.write(nx.shortest_path(G, (0,0,0), (list_num+1,0,1), weight='distance'))
         # st.graphviz_chart(
