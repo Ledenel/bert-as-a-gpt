@@ -10,3 +10,6 @@ streamlit
 xarray
 networkx
 h5py
+vaex
+vaex-hdf5
+tables

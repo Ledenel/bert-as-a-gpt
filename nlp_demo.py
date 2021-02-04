@@ -8,6 +8,8 @@ import numpy as np
 import plotly.graph_objects as go
 from torch.nn.functional import log_softmax
 from transformers.utils.dummy_pt_objects import AutoModel
+import h5py
+import vaex
 
 config_dict = dict(
     cache_dir="cache",
@@ -63,6 +65,9 @@ def encoded_embs(tokenizer, model, sequence):
     token_output_states, *_ = model(sequence_input, output_hidden_states=True).hidden_states
     return pd.Series(list(token_output_states.squeeze().detach().numpy()), index=tokenzied_inputs)
 
+def to_hdf5(series: pd.Series):
+    series.to_hdf("test.h5", key=f"{series.name}")
+
 """
 class BertLMPredictionHead(nn.Module):
     def __init__(self, config):
@@ -85,7 +90,11 @@ with torch.no_grad():
     # st.write(last_layer_map[list("生活的真谛是爱")])
     # st.write(bias_map[list("生活的真谛是爱")])
     st.write(encoded_embs(tokenizer, model, sequence))
-    
+    to_hdf5(encoded_embs(tokenizer, model, sequence))
+    with h5py.File("test.h5", "r") as f:
+        st.write(pprint.pformat(f["/None"]["values"][:]))
+        #FIXME: wrong dtype
+    # vaex.open("test.h5")
     sequence_input = tokenizer.encode(sequence, return_tensors="pt")
     mask_token_index, real_token = list(enumerate(sequence_input[0]))[1]
     if tokenizer.convert_ids_to_tokens([real_token])[0] not in tokenizer.all_special_tokens:
