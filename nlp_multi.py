@@ -72,6 +72,10 @@ def embedding_series(tokenizer, tensor, name):
 
 tokenizer, model = init()
 
+@st.cache(hash_funcs={
+    type(tokenizer): id,
+    type(model): id
+})
 def encode_embs(sentence):
     print(f"working for {sentence}")
     sequence_input = tokenizer.encode(sentence, return_tensors="pt")
@@ -92,12 +96,12 @@ def distance(left, right):
         # return length(left_vec - right_vec)
         # print(left_vec[0], right_vec[0])
         # FIXME: why left is equal to right? [CLS] is always same, [SEP] only differ when length change.
-        assert not np.array_equal(left_vec, right_vec)
-        diff = left_vec - right_vec
-        print(np.max(diff), np.min(diff))
+        # assert not np.array_equal(left_vec, right_vec)
+        # diff = left_vec - right_vec
+        # print(np.max(diff), np.min(diff))
         # print(np.abs(left_vec - right_vec))
-        return np.max(np.abs(left_vec - right_vec))
-        #return np.sum((left_vec - right_vec) ** 2) ** 0.5
+        # return np.max(np.abs(left_vec - right_vec))
+        return np.sum((left_vec - right_vec) ** 2) ** 0.5
     else:
         return 0
 
