@@ -89,6 +89,7 @@ with torch.no_grad():
     # st.write(first_layer_map[list("生活的真谛是爱")])
     # st.write(last_layer_map[list("生活的真谛是爱")])
     # st.write(bias_map[list("生活的真谛是爱")])
+    # FIXME: why [CLS] is always same??? [SEP] only differ when length change??
     st.write(encoded_embs(tokenizer, model, sequence))
     to_hdf5(encoded_embs(tokenizer, model, sequence))
     with h5py.File("test.h5", "r") as f:
