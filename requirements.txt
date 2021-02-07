@@ -14,3 +14,5 @@ vaex
 vaex-hdf5
 tables
 pydot
+scipy
+bellmanford

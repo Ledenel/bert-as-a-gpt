@@ -9,6 +9,8 @@ import numpy as np
 import plotly.graph_objects as go
 from torch.nn.functional import log_softmax
 from transformers.utils.dummy_pt_objects import AutoModel
+import bellmanford as bf
+import plotly.figure_factory as ff
 import h5py
 import vaex
 
@@ -102,7 +104,7 @@ def distance(left, right):
         # print(np.abs(left_vec - right_vec))
         # return np.max(np.abs(left_vec - right_vec))
         # return np.sum((left_vec - right_vec) ** 2) ** 0.5
-        return np.dot(left_vec, right_vec)
+        return -np.dot(left_vec, right_vec)
     else:
         return 0
 
@@ -123,6 +125,7 @@ if __name__ == "__main__":
         nodes.append([1]) 
         st.write(nodes)
         G = nx.Graph()
+        dis_df = []
         for gid, (lefts, rights) in enumerate(zip(
             nodes[:-1],
             nodes[1:]
@@ -131,8 +134,17 @@ if __name__ == "__main__":
                 for rid, right in enumerate(rights):
                     v = distance(left, right)
                     # st.write(f"{left} -> {right} {v}")
+                    dis_df.append({"from": left, "to": right, "dis": v})
                     G.add_edge((gid, lid, left), (gid+1, rid, right), distance=v)
-        st.write(nx.shortest_path(G, (0,0,0), (list_num+1,0,1), weight='distance'))
+        dis_df = pd.DataFrame(dis_df)
+        dis_df = dis_df[(dis_df["from"] != 0) & (dis_df["to"] != 1)]
+        st.dataframe(dis_df.sort_values(by="dis"), width=800)
+        bin_size = st.number_input("bin_size", 20)
+        fig = ff.create_distplot([dis_df["dis"][dis_df["from"] == x] for x in dis_df["from"].unique()], dis_df["from"].unique())
+        st.write(fig)
+        length, nodes, negative_cycle = bf.bellman_ford(G, (0,0,0), (list_num+1,0,1), weight='weight')
+        st.write(negative_cycle)
+        st.write(nodes)
         # st.graphviz_chart(
         #     nx.nx_pydot.to_pydot(G).to_string()
         # )
