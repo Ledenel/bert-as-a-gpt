@@ -1,4 +1,5 @@
 from networkx.readwrite.edgelist import read_weighted_edgelist
+from numpy.lib.function_base import iterable
 from transformers import AutoModelWithLMHead, AutoTokenizer
 import os
 import torch
@@ -94,7 +95,7 @@ def length(A):
 
 def distance(left, right):
     if isinstance(left, str) and isinstance(right, str):
-        left_vec, right_vec = [encode_embs(t).iloc[1:-1].sum() for t in [left, right]]
+        left_vec, right_vec = [encode_embs(t).iloc[1:-1].mean() for t in [left, right]]
         # return length(left_vec - right_vec)
         # print(left_vec[0], right_vec[0])
         # FIXME: why left is equal to right? [CLS] is always same, [SEP] only differ when length change.
@@ -110,7 +111,17 @@ def distance(left, right):
 
 import networkx as nx
 
-if __name__ == "__main__":
+def as_plain(path):
+    if isinstance(path, str):
+        yield path
+    elif iterable(path):
+        for item in path:
+            yield from as_plain(item)
+        
+
+
+
+def main():
     with torch.no_grad():
         # tokenizer, model = init()
         # encode_embs = encoded_embs_func(tokenizer, model)
@@ -121,32 +132,40 @@ if __name__ == "__main__":
             with col:
                 texts.append(st.text_area(f"list {i+1}"))
         nodes = [[line.strip() for line in group.split() if line.strip() != ""] for group in texts]
-        nodes.insert(0, [0])
-        nodes.append([1]) 
+        nodes, G, length, negative_cycle = list_maximum_likehood_on_embeddings(list_num, nodes)
+        pick_n = st.number_input("get top k?", 3)
+        for i, path in zip(range(pick_n), nx.shortest_simple_paths(G, (0,0,0), (list_num+1,0,1), weight='distance')):
+            st.write(" ".join(as_plain(path)))
+        #TODO add negative spanning tree on complete graph to deal with non-sequence product(projection).
+        #TODO negative shortest path is a specific spanning tree.
+        st.write(bf.negative_edge_cycle(G))
+        st.write(length, negative_cycle)
         st.write(nodes)
-        G = nx.Graph()
-        dis_df = []
-        for gid, (lefts, rights) in enumerate(zip(
+
+def list_maximum_likehood_on_embeddings(list_num, nodes):
+    nodes.insert(0, [0])
+    nodes.append([1])
+    st.write(nodes)
+    G = nx.DiGraph()
+    dis_df = []
+    for gid, (lefts, rights) in enumerate(zip(
             nodes[:-1],
             nodes[1:]
-        )):
-            for lid, left in enumerate(lefts):
-                for rid, right in enumerate(rights):
-                    v = distance(left, right)
-                    # st.write(f"{left} -> {right} {v}")
-                    dis_df.append({"from": left, "to": right, "dis": v})
-                    G.add_edge((gid, lid, left), (gid+1, rid, right), distance=v)
-        dis_df = pd.DataFrame(dis_df)
-        dis_df = dis_df[(dis_df["from"] != 0) & (dis_df["to"] != 1)]
-        st.dataframe(dis_df.sort_values(by="dis"), width=800)
-        bin_size = st.number_input("bin_size", 20)
-        fig = ff.create_distplot([dis_df["dis"][dis_df["from"] == x] for x in dis_df["from"].unique()], dis_df["from"].unique())
-        st.write(fig)
-        length, nodes, negative_cycle = bf.bellman_ford(G, (0,0,0), (list_num+1,0,1), weight='weight')
-        st.write(negative_cycle)
-        st.write(nodes)
+    )):
+        for lid, left in enumerate(lefts):
+            for rid, right in enumerate(rights):
+                v = distance(left, right)
+                dis_df.append({"from": left, "to": right, "dis": v})
+                G.add_edge((gid, lid, left), (gid+1, rid, right), distance=v)
+    dis_df = pd.DataFrame(dis_df)
+    dis_df = dis_df[(dis_df["from"] != 0) & (dis_df["to"] != 1)]
+    st.dataframe(dis_df.sort_values(by="dis"), width=800)
+    length, nodes, negative_cycle = bf.bellman_ford(G, (0,0,0), (list_num+1,0,1), weight='distance')
+    return nodes,G,length,negative_cycle
         # st.graphviz_chart(
         #     nx.nx_pydot.to_pydot(G).to_string()
         # )
         
         
+if __name__ == "__main__":
+    main()
