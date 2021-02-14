@@ -29,13 +29,37 @@ def init():
 
 tokenizer, model = init()
 
-with torch.no_grad():
+def my_model():
     text = st.text_input("Input sentence:")
     splited_text = tokenizer.tokenize(text)
     st.write(splited_text)
     splited_ids = tokenizer.convert_tokens_to_ids(splited_text)
     st.write(splited_ids)
     output = model(torch.tensor(splited_ids).unsqueeze(0), output_hidden_states=True)
+    st.write(output)
+    bias = model.cls.predictions.decoder.bias
+    st.write(bias)
+    token_strs = tokenizer.convert_ids_to_tokens(range(len(bias)))
+    # st.write(token_strs)
+    logits = xr.DataArray(
+        output.logits.detach().numpy(),
+        coords={
+            "word": token_strs,
+            "seq_tokens": ("seq", splited_text),
+            "seq_ids": ("seq", splited_ids),
+        },
+        dims=["batch", "seq", "word"],
+    )
+    return logits
+
+with torch.no_grad():
+    text = st.text_input("Input sentence:")
+    splited_text = tokenizer.tokenize(text)
+    st.write(splited_text)
+    splited_ids = tokenizer.convert_tokens_to_ids(splited_text)
+    all_mask = tokenizer.convert_tokens_to_ids(["[MASK]"] * len(splited_text))# - 1 + ["[SEP]"])
+    st.write(splited_ids)
+    output = model(torch.tensor(all_mask).unsqueeze(0), output_hidden_states=True)
     st.write(output)
     bias = model.cls.predictions.decoder.bias
     st.write(bias)
