@@ -1,0 +1,368 @@
+import ring
+import streamlit as st
+import numpy as np
+import pandas as pd
+from pathlib import Path
+from random import randint, choice, sample
+from tempfile import template
+from typing import List
+from pathlib import Path
+from string import Template
+from pprint import pformat
+import os
+import shutil
+import ring
+import sys
+
+def leafs(lst):
+    def rec_walk(root, root_path):
+        if isinstance(root, list):
+            for idx, val in enumerate(root):
+                yield from rec_walk(val, root_path + [idx])
+        else:
+            yield root_path
+    yield from rec_walk(lst, [])
+
+def get_lst(lst, path):
+    current = lst
+    for item in path:
+        current = current[item]
+    return current
+
+def set_lst(lst, path, value):
+    current = lst
+    for item in path[:-1]:
+        current = current[item]
+    current[path[-1]] = value
+
+def index(args):
+    """index <item_index> | word <keyword>"""
+    if args["<item_index>"]:
+        val:str = args["<item_index>"]
+        if val.isdigit() and int(val) > 0:
+            return int(val) - 1
+        else:
+            raise ValueError(f"{val} 需要为一个大于0的整数。")
+    elif args["<keyword>"]:
+        val = args["<keyword>"]
+        return lambda s: val in s
+    else:
+        return None
+
+class OneOf(list):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __str__(self):
+        return f"OneOf[{','.join(str(x) for x in self)}]"
+    
+    def generate(self):
+        v = choice(self)
+        if hasattr(v, "generate"):
+            v = v.generate()
+        else:
+            v = [v]
+        return v
+
+class All(list):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __str__(self):
+        return f"All[{','.join(str(x) for x in self)}]"
+    
+    def generate(self):
+        v_all = []
+        for item in self:
+            if hasattr(item, "generate"):
+                item = item.generate()
+            else:
+                item = [item]
+            v_all.extend(item)
+        return v_all
+
+
+class MyList:
+    def __init__(self, path: Path, lst: List[str], is_batch: bool = False) -> None:
+        self.path = path
+        self.lst = lst
+        self.is_batch = is_batch
+        self._index = None
+
+    def select_(self, index):
+        """index <item_index> | word <keyword>"""
+        if callable(index):
+            ids = [i for i,s in enumerate(self.lst) if index(s)]
+            if len(ids) == 1:
+                ids = ids[0]
+            self._index = ids
+        else:
+            self._index = index
+        return self
+    
+    def assert_one_index(self):
+        idx = self._index
+        if idx is None:
+            raise ValueError("缺少 index")
+        elif not isinstance(idx, int):
+            raise ValueError(f"index数量太多: {idx}")    
+        return self
+
+    def add_before_(self, item):
+        idx = self._index
+        if idx is None:
+            idx = len(self.lst)
+        self.lst[idx:idx] = [item]
+        self._index = None
+        return self
+
+    def delete_(self):
+        idx = self._index
+        del self.lst[idx]
+        self._index = None
+        return self
+
+    def random_(self):
+        if len(self.lst) == 0:
+            raise ValueError(f"{self.path} 还空空如也，无法取出一个。")
+        self._index = randint(0, len(self.lst) - 1)
+        return self
+
+    def random_pick(self):
+        if len(self.as_list()) == 0:
+            raise ValueError(f"{self.path} 还空空如也，无法取出一个。")
+        return choice(self.as_list())
+
+    def log(self, message_func):
+        print(message_func(self))
+        return self
+
+    def print(self, number=True, chain=False, number_seperator=":", item_seperator="\n"):
+        # logger.debug(f"printing {self.path, self.lst, self._index ,self.index_list(), self.as_list()}")
+        result = item_seperator.join(
+            (f"{i+1}{number_seperator}" if number else "") + f"{x}" for i,x in enumerate(self.lst) if i in self.index_list()
+        )
+        if chain:
+            print(result)
+            return self
+        else:
+            return result
+    
+    def index_list(self):
+        idx = self._index
+        idx = [idx] if isinstance(idx, int) else idx
+        idx = range(0, len(self.lst)) if idx is None else idx
+        return idx
+
+    def as_list(self):
+        return [x for i,x in enumerate(self.lst) if i in self.index_list()]
+
+    def shrink(self):
+        return MyList(self.path, self.as_list())
+
+    def strip_path(self):
+        self.path = Path(".") / self.path.parts[-1]
+        return self
+
+    @ring.lru()
+    @property
+    def is_normal(self):
+        return not self.is_batch
+
+    def batch(self):
+        result = []
+        for file in self:
+            sublist = MyList.load_file(file)
+            ls = sublist.expand()
+            if not ls:
+                ls = [file]
+            result.extend(ls)
+        return MyList(
+            Path(self.path.name), 
+            result
+        )
+
+    # def __bool__(self):
+    #     if self.lst:
+    #         return True
+    #     else:
+    #         return False
+
+    def expand(self):
+        if self.is_batch:
+            return self.as_list()
+        elif len(self.lst) > 0:
+            return [self.random_pick()]
+        else:
+            return []
+
+    def expand_godel(self):
+        if self.is_batch:
+            return self.batch().as_list()
+        elif len(self.lst) > 0:
+            return [self.random_pick()]
+        else:
+            return []
+
+    def __len__(self):
+        return len(self.as_list())
+
+    def single_tree(self, k):
+        return OneOf(self) if k > len(self) else OneOf(sample(self.as_list(), k))
+
+    def batch_tree(self, k):
+        result = []
+        for file in self:
+            sublist = MyList.load_file(file)
+            ls = All(sublist) if sublist.is_batch else sublist.single_tree(k)
+            if not ls:
+                ls = OneOf([file])
+            result.append(ls)
+        return All(result)
+
+    def expand_godel_tree(self, k):
+        if self.is_batch:
+            return self.batch_tree(k)
+        else:
+            return self.single_tree(k)
+
+    def __str__(self) -> str:
+        return self.print()
+
+    def godel_tree(self, remain_step, sample_num, debug):
+        if remain_step > 63:
+            remain_step = 63
+        root_obj = self.expand_godel_tree(sample_num)
+        leaf_paths = list(leafs(root_obj))
+        for _ in range(remain_step-1):
+            if debug:
+                print(root_obj)
+            extendable_paths = [path for path in leaf_paths if len(MyList.load_file(get_lst(root_obj, path)).lst) > 0]
+            if debug:
+                print(extendable_paths)
+            if not extendable_paths:
+                break
+            pick_path = choice(extendable_paths)
+            if debug:
+                print(pick_path)
+            value = MyList.load_file(get_lst(root_obj, pick_path)).expand_godel_tree(sample_num)
+            set_lst(root_obj, pick_path, value)
+            leaf_paths = list(leafs(root_obj))
+        return root_obj
+
+
+    def godel(self, remain_step, debug):
+        if remain_step > 63:
+            remain_step = 63
+        current = self.expand_godel()
+        for _ in range(remain_step-1):
+            if debug:
+                print(current)
+            extendable_indexes = [i for i, name in enumerate(current) if len(MyList.load_file(name).lst) > 0]
+            if not extendable_indexes:
+                break
+            pick_batch = choice(extendable_indexes)
+            current[pick_batch:pick_batch+1] = MyList.load_file(current[pick_batch]).expand_godel()
+        return MyList(self.path, current)
+
+    def __iter__(self):
+        return iter(self.as_list())
+
+    def merge_(self, other):
+        self.lst.extend(other)
+        return self
+
+    def dedup_(self):
+        rev_map = {k:i for i,k in reversed(list(enumerate(self)))}
+        all_index = set(range(0,len(self.as_list())))
+        deduped = all_index - set(rev_map.values())
+        deduped = list(deduped)
+        deduped.sort()
+        print(f"de-duplicated '{self.path}': ")
+        print(self.select_(deduped).print())
+        return self.select_(all_index - set(deduped))
+
+    @ring.lru()
+    @classmethod
+    def load_file(cls, file_path):
+        file_path = Path(file_path)
+        if len(str(file_path).encode()) < 63 and file_path.is_file():
+            with open(file_path, "r", encoding="utf-8") as f:
+                raw_list = [l.strip() for l in f if l.strip() != ""]
+                is_batch = False
+                if raw_list and raw_list[0] == "batch":
+                    del raw_list[0]
+                    is_batch = True
+                return MyList(file_path, raw_list, is_batch=is_batch)
+        else:
+            return MyList(file_path, [])
+
+    @classmethod
+    def load_dir_name(cls, file_path):
+        file_path = Path(file_path)
+        if file_path.is_dir():
+            return MyList(file_path,[str(dir_file) for dir_file in file_path.iterdir() if dir_file.is_file()])
+        else:
+            return MyList(file_path, [])
+
+    @classmethod
+    def load_dir(cls, file_path):
+        file_path = Path(file_path)
+        if file_path.is_dir():
+            return [MyList.load_file(dir_file) for dir_file in file_path.iterdir() if dir_file.is_file()]
+        else:
+            return []
+    
+    def save(self):
+        # logger.debug(f"saving {self.path, self.lst, self._index ,self.index_list(), self.as_list()}")
+        with open(self.path, "w", encoding="utf-8") as f:
+            for l in self:
+                print(l.strip(), file=f)
+    
+    def remove_self(self):
+        if self.path.is_file():
+            print(f"remove {len(self.as_list())} items from '{self.path}'")
+            os.remove(self.path)
+        else:
+            print(f"要移除的 '{self.path}' 不存在。")
+
+def import_from(args):
+    path = Path(args["<list_file>"]).resolve()
+    if path.is_file():
+        return MyList.load_file(path.parts[-1]).merge_(MyList.load_file(path)).save()
+    elif path.is_dir():
+        names = []
+        for item in MyList.load_dir(path):
+            MyList.load_file(item.path.parts[-1]).merge_(item).save()
+            names.append(str(item.path.resolve()))
+        return "imported:\n" + "\n".join(names)
+    else:
+        raise ValueError(f"未知的文件类型{path}")
+
+from contextlib import contextmanager
+
+@contextmanager
+def cwd(path):
+    oldpwd=os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(oldpwd)
+
+def main():
+    folder = st.selectbox("folder path", [Path(".").resolve()] + [x.resolve() for x in Path(".").glob("**/*") if x.is_dir() and not x.parts[0].startswith(".")])
+    with cwd(folder):
+        col1, col2, col3 = st.beta_columns(3)
+        picked_list = col1.selectbox("selection", [x.relative_to(folder) for x in Path(folder).glob("**/*") if x.is_file()])
+        beam_len = col2.number_input("beam witdh", min_value=1, value=3)
+        max_step = col3.number_input("max expansions", min_value=1, value=4)
+        st.write(MyList.load_file(picked_list).godel_tree(max_step, beam_len, False))
+
+
+
+    
+
+if __name__ == "__main__":
+    main()
+

@@ -16,3 +16,6 @@ tables
 pydot
 scipy
 bellmanford
+ring
+Pyro5
+xarray-extras

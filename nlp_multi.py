@@ -157,9 +157,9 @@ def list_maximum_likehood_on_embeddings(list_num, nodes):
                 v = distance(left, right)
                 dis_df.append({"from": left, "to": right, "dis": v})
                 G.add_edge((gid, lid, left), (gid+1, rid, right), distance=v)
-    dis_df = pd.DataFrame(dis_df)
-    dis_df = dis_df[(dis_df["from"] != 0) & (dis_df["to"] != 1)]
-    st.dataframe(dis_df.sort_values(by="dis"), width=800)
+    # dis_df = pd.DataFrame(dis_df)
+    # dis_df = dis_df[(dis_df["from"] != 0) & (dis_df["to"] != 1)]
+    # st.dataframe(dis_df.sort_values(by="dis"), width=800)
     length, nodes, negative_cycle = bf.bellman_ford(G, (0,0,0), (list_num+1,0,1), weight='distance')
     return nodes,G,length,negative_cycle
         # st.graphviz_chart(
