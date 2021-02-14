@@ -39,7 +39,11 @@ def translate(top_indexes):
     return translated
 
 def pick_words(logit):
-    self_logits = logit.sel(seq=logit.coords["seq_idx"], word=logit.coords["seq_words"])
+    kws = {}
+    kws["seq"] = logit.coords["seq_idx"]
+    if "word" in logit.dims:
+        kws["word"] = logit.coords["seq_words"]
+    self_logits = logit.sel(**kws)
     return self_logits
 
 def my_model(*texts):
@@ -90,6 +94,7 @@ def main():
         st.code(target_text[0])
         ents = pick_words(word_entropy(result))
         st.code(ents)
+        st.code(pick_words(features))
 
 if __name__ == "__main__":
     main()
