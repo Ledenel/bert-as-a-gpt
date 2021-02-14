@@ -76,17 +76,20 @@ def my_model(*texts):
     #     dims=["word"],
     # )
     return logits
+    
+def main():
+    with torch.no_grad():
+        text = st.text_area("Input sentence:")
+        result = my_model(*text.splitlines())
+        st.code(result)
+        result.coords["seq_words"]
+        target_text = translate(xsort.argtopk(result, k=7, dim="word"))
+        st.code(target_text[0])
+        ents = pick_words(word_entropy(result))
+        st.code(ents)
 
-with torch.no_grad():
-    text = st.text_area("Input sentence:")
-    result = my_model(*text.splitlines())
-    st.code(result)
-    result.coords["seq_words"]
-    target_text = translate(xsort.argtopk(result, k=7, dim="word"))
-    st.code(target_text[0])
-    ents = pick_words(word_entropy(result))
-    st.code(ents)
-
-
+if __name__ == "__main__":
+    main()
 
         
+
