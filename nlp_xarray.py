@@ -39,7 +39,7 @@ def translate(top_indexes):
     return translated
 
 def pick_words(logit):
-    self_logits = logit.sel(seq=result.coords["seq_idx"], word=result.coords["seq_words"])
+    self_logits = logit.sel(seq=logit.coords["seq_idx"], word=logit.coords["seq_words"])
     return self_logits
 
 def my_model(*texts):
@@ -84,7 +84,7 @@ with torch.no_grad():
     result.coords["seq_words"]
     target_text = translate(xsort.argtopk(result, k=7, dim="word"))
     st.code(target_text[0])
-    ents = pick_words(word_entropy(result[0]))
+    ents = pick_words(word_entropy(result))
     st.code(ents)
 
 
