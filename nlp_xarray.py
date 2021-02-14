@@ -29,87 +29,64 @@ def init():
 
 tokenizer, model = init()
 
-def my_model():
-    text = st.text_input("Input sentence:")
-    splited_text = tokenizer.tokenize(text)
-    st.write(splited_text)
-    splited_ids = tokenizer.convert_tokens_to_ids(splited_text)
-    st.write(splited_ids)
-    output = model(torch.tensor(splited_ids).unsqueeze(0), output_hidden_states=True)
-    st.write(output)
+def word_entropy(logits):
+    softmaxes = xr.apply_ufunc(lambda t: -sp.log_softmax(t, axis=logits.dims.index("word")) ,logits)
+    return softmaxes
+
+def translate(top_indexes):
+    word_maps = {v:k for k,v in tokenizer.vocab.items()}
+    translated = xr.apply_ufunc(np.vectorize(lambda x: word_maps[x]), top_indexes)
+    return translated
+
+def pick_words(logit):
+    self_logits = logit.sel(seq=result.coords["seq_idx"], word=result.coords["seq_words"])
+    return self_logits
+
+def my_model(*texts):
+    splited_texts = [tokenizer.tokenize(text) for text in texts]
+    splited_ids = [tokenizer.convert_tokens_to_ids(x) for x in splited_texts]
+    splited_ranges = [list(range(len(x))) for x in splited_texts]
+    output = model(torch.tensor(splited_ids), output_hidden_states=True)
     bias = model.cls.predictions.decoder.bias
-    st.write(bias)
     token_strs = tokenizer.convert_ids_to_tokens(range(len(bias)))
-    # st.write(token_strs)
     logits = xr.DataArray(
         output.logits.detach().numpy(),
         coords={
             "word": token_strs,
-            "seq_tokens": ("seq", splited_text),
-            "seq_ids": ("seq", splited_ids),
+            "seq_texts": ("batch", list(texts)),
+            "seq_words": (("batch","seq"), splited_texts),
+            "seq_word_ids": (("batch","seq"), splited_ids),
+            "seq_idx": (("batch","seq"), splited_ranges),
         },
         dims=["batch", "seq", "word"],
     )
+    # features = xr.DataArray(
+    #     torch.stack(output.hidden_states).detach().numpy(),
+    #     coords={
+    #         "seq_tokens": ("seq", splited_text),
+    #         "seq_ids": ("seq", splited_ids),
+    #     },
+    #     dims=["layers", "batch", "seq", "hidden"],
+    # )
+    # bias = xr.DataArray(
+    #     bias.detach().numpy(),
+    #     coords={
+    #         "word": token_strs,
+    #     },
+    #     dims=["word"],
+    # )
     return logits
 
 with torch.no_grad():
-    text = st.text_input("Input sentence:")
-    splited_text = tokenizer.tokenize(text)
-    st.write(splited_text)
-    splited_ids = tokenizer.convert_tokens_to_ids(splited_text)
-    all_mask = tokenizer.convert_tokens_to_ids(["[MASK]"] * len(splited_text))# - 1 + ["[SEP]"])
-    st.write(splited_ids)
-    output = model(torch.tensor(all_mask).unsqueeze(0), output_hidden_states=True)
-    st.write(output)
-    bias = model.cls.predictions.decoder.bias
-    st.write(bias)
-    token_strs = tokenizer.convert_ids_to_tokens(range(len(bias)))
-    # st.write(token_strs)
-    logits = xr.DataArray(
-        output.logits.detach().numpy(),
-        coords={
-            "word": token_strs,
-            "seq_tokens": ("seq", splited_text),
-            "seq_ids": ("seq", splited_ids),
-        },
-        dims=["batch", "seq", "word"],
-    )
-    features = xr.DataArray(
-        torch.stack(output.hidden_states).detach().numpy(),
-        coords={
-            "seq_tokens": ("seq", splited_text),
-            "seq_ids": ("seq", splited_ids),
-        },
-        dims=["layers", "batch", "seq", "hidden"],
-    )
-    bias = xr.DataArray(
-        bias.detach().numpy(),
-        coords={
-            "word": token_strs,
-        },
-        dims=["word"],
-    )
-    # logits
-    # features
-    # bias
-    # logits - bias
-    # sorted_logits = logits.argsort(axis="word", ascending=False)
-    # sorted_logits
-    # ids = tokenizer.convert_ids_to_tokens(sorted_logits.sel(word="123").squeeze("batch"))
-    tops = xsort.argtopk(logits, k=10, dim="word")
-    word_maps = {v:k for k,v in tokenizer.vocab.items()}
-    tops
-    translated = xr.apply_ufunc(np.vectorize(lambda x: word_maps[x]), tops)
-    translated
-    # self_logits = xr.apply_ufunc(lambda t: np.diagonal(t, axis1=logits.dims.index('seq'), axis2=logits.dims.index('word')), logits.sel(word=splited_text))
-    softmaxes = xr.apply_ufunc(lambda t: -sp.log_softmax(t, axis=logits.dims.index("word")) ,logits)
-    softmaxes.loc[dict(word=tokenizer.all_special_tokens)] = 0
-    self_logits = softmaxes.sel(seq=xr.DataArray(range(len(splited_text)), dims=["logits"]), word=xr.DataArray(splited_text, dims=["logits"]))
-    self_logits
-    most_message = xsort.argtopk(self_logits, k=3, dim="logits")
-    most_message
-    # self_logits.isel(most_message)
-    # ids = tops.squeeze("batch").apply(tokenizer.convert_ids_to_tokens)
+    text = st.text_area("Input sentence:")
+    result = my_model(*text.splitlines())
+    st.code(result)
+    result.coords["seq_words"]
+    target_text = translate(xsort.argtopk(result, k=7, dim="word"))
+    st.code(target_text[0])
+    ents = pick_words(word_entropy(result[0]))
+    st.code(ents)
+
 
 
         
