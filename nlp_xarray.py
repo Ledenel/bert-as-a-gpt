@@ -60,27 +60,30 @@ def my_model(*texts):
         },
         dims=["batch", "seq", "word"],
     )
-    # features = xr.DataArray(
-    #     torch.stack(output.hidden_states).detach().numpy(),
-    #     coords={
-    #         "seq_tokens": ("seq", splited_text),
-    #         "seq_ids": ("seq", splited_ids),
-    #     },
-    #     dims=["layers", "batch", "seq", "hidden"],
-    # )
-    # bias = xr.DataArray(
-    #     bias.detach().numpy(),
-    #     coords={
-    #         "word": token_strs,
-    #     },
-    #     dims=["word"],
-    # )
-    return logits
-    
+    features = xr.DataArray(
+        torch.stack(output.hidden_states).detach().numpy(),
+        coords={
+            "seq_texts": ("batch", list(texts)),
+            "seq_words": (("batch","seq"), splited_texts),
+            "seq_word_ids": (("batch","seq"), splited_ids),
+            "seq_idx": (("batch","seq"), splited_ranges),
+        },
+        dims=["layers", "batch", "seq", "hidden"],
+    )
+    bias = xr.DataArray(
+        bias.detach().numpy(),
+        coords={
+            "word": token_strs,
+        },
+        dims=["word"],
+    )
+    return logits, features, bias
+
 def main():
     with torch.no_grad():
         text = st.text_area("Input sentence:")
-        result = my_model(*text.splitlines())
+        logits, features, bias = my_model(*text.splitlines())
+        result = logits
         st.code(result)
         result.coords["seq_words"]
         target_text = translate(xsort.argtopk(result, k=7, dim="word"))
