@@ -16,6 +16,7 @@ import xarray_extras.sort as xsort
 import zhon.hanzi
 import zhon.pinyin
 from stopwordsiso import stopwords
+from random import sample, randint, choice
 
 config_dict = dict(
     cache_dir="cache",
@@ -129,11 +130,58 @@ def fill_mask(text):
         #             min_ent, min_w, min_i = seq_i[ind], ind, i
         # st.code((min_ent, min_w, min_i))
 
+import itertools
 
+def check_partitions(mode, lens, part):
+    for mode_value, left, right in zip(mode, part[:-1], part[1:]):
+        if sum(lens[left:right]) > mode_value:
+            return False
+    return True
+
+def partition_indexes(k, sum, allow_zero=False):
+    if allow_zero:
+        comb = itertools.combinations_with_replacement(range(1, sum), k)
+    else:
+        comb = itertools.combinations(range(1, sum), k)
+    return (([0] + list(partitions) + [sum]) for partitions in comb)
+
+def partition_counts(k, sum, allow_zero=False):
+    for part in partition_indexes(k, sum, allow_zero=allow_zero):
+        yield [right - left for left, right in zip(part[:-1], part[1:])]
 
 def main():
     with torch.no_grad():
-        text = st.text_area("Input sentence:")
+        text = st.text_area("Input keywords:")
+        mode = [5,7,5]
+        keywords = [x for x in text.split() if x.strip() != ""]
+        keyword_lens = [len(x) for x in keywords]
+        valid_parts = list(partition_indexes(2, len(keywords)))
+        valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
+        st.write(valid_parts)
+        for part in valid_parts:
+            all_gen = []
+            for mode_value, left, right in zip(mode, part[:-1], part[1:]):
+                mask_spin_counts = right - left + 1
+                remain_mask_count = mode_value - sum(keyword_lens[left:right])
+                current = keywords[left:right]
+                for _ in range(remain_mask_count):
+                    spin = randint(0, len(current))
+                    current[spin:spin] = ["[MASK]"]
+                all_gen.append("".join(current))
+                
+                # for counts in partition_counts(mask_spin_counts, remain_mask_count, allow_zero=True):
+                #     for sep, mask_count in zip([""] + keywords[left:right], counts):
+                #         pass
+                #     st.code([part, left, right, counts])
+            st.code("，".join(all_gen))
+        # for part in valid_parts:
+        #     sub = []
+        #     for mode_value, left, right in zip(mode, part[:-1], part[1:]):
+        #         remain = sum(lens[left:right]) + 
+
+
+
+
         # logits, features, bias = my_model(*text.splitlines())
         # result = logits
         # st.code(result)
