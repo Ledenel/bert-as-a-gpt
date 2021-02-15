@@ -14,6 +14,8 @@ import xarray as xr
 import scipy.special as sp
 import xarray_extras.sort as xsort
 import zhon.hanzi
+import zhon.pinyin
+from stopwordsiso import stopwords
 
 config_dict = dict(
     cache_dir="cache",
@@ -93,25 +95,29 @@ def each_min(logit):
 
 
 def fill_mask(text):
+    ent = 0
     while "[MASK]" in text:
         logits, features, bias = my_model(text)
         logits = word_entropy(logits[0])
         origin = logits.coords["seq_words"]
         mask_locations = logits.coords["seq_words"] == "[MASK]"
-        st.code(mask_locations)
-        logits = logits.drop_sel(word=list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens), errors='ignore')
+        # st.code(stopwords("zh"))
+        # st.code(mask_locations)
+        logits = logits.drop_sel(word=list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["..."] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops), errors='ignore')
         logits = logits.sel(seq=mask_locations)
-        st.code(logits)
+        # st.code(logits)
         val = logits.min(dim=["seq", "word"])
-        st.code(logits.min(dim=("seq", "word")))
+        # st.code(logits.min(dim=("seq", "word")))
         min_item = logits.where(logits==val, drop=True).squeeze()
-        st.code(min_item)
-        st.code(origin)
+        ent += min_item
+        # st.code(min_item)
+        # st.code(origin)
         text = origin
         text[min_item.coords["seq"]] = min_item.coords["word"]
-        st.code(text)
+        # st.code(text)
         text = "".join(str(x) for x in text.data)
-        st.code(text)
+        # st.code(text)
+    return text, float(ent)
 
         # min_ent, min_w, min_i = np.inf, None, None
         # for i, w in enumerate(logits.coords["seq_words"]):

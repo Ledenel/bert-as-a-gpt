@@ -2,6 +2,7 @@ torch
 transformers
 zhon
 pypinyin
+stopwordsiso
 pandas
 numpy
 plotly
