@@ -111,7 +111,7 @@ config_dict = dict(
     cache_dir="cache",
     # force_download=True,
     # resume_download=True,
-    proxies={'http': os.environ["HTTP_PROXY"], 'https': os.environ["HTTPS_PROXY"]}
+    # proxies={'http': os.environ["HTTP_PROXY"], 'https': os.environ["HTTPS_PROXY"]}
 )
 
 def make_sentence(mode, keywords):
@@ -129,7 +129,7 @@ def make_sentence(mode, keywords):
                 spin = randint(0, len(current))
                 current[spin:spin] = ["[MASK]"]
             all_gen.append("".join(current))
-        gen_templates.append("，".join(all_gen) + "。[SEP]")
+        gen_templates.append("[CLS]" + "，".join(all_gen) + "。[SEP]")
     return fill_mask(choice(gen_templates))
 
 # @st.cache(allow_output_mutation=True)
@@ -146,7 +146,7 @@ def main():
         text = st.text_area("Input keywords:")
         mode = [5,7,5]
         keywords = [x for x in text.split() if x.strip() != ""]
-        st.code(make_sentence(mode, keywords))
+        st.code([keywords, make_sentence(mode, keywords)])
 
 if __name__ == "__main__":
     main()

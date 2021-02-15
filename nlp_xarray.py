@@ -154,7 +154,7 @@ def main():
         text = st.text_area("Input keywords:")
         mode = [5,7,5]
         keywords = [x for x in text.split() if x.strip() != ""]
-        make_sentence(mode, keywords)
+        st.code(make_sentence(mode, keywords))
         # for part in valid_parts:
         #     sub = []
         #     for mode_value, left, right in zip(mode, part[:-1], part[1:]):
@@ -172,13 +172,13 @@ def main():
         # ents = pick_words(word_entropy(result))
         # st.code(ents)
         # st.code(pick_words(features))
-        st.code(fill_mask(text))
+        # st.code(fill_mask(text))
 
 def make_sentence(mode, keywords):
     keyword_lens = [len(x) for x in keywords]
     valid_parts = list(partition_indexes(len(mode) - 1, len(keywords)))
     valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
-    st.write(valid_parts)
+    # st.write(valid_parts)
     gen_templates = []
     for part in valid_parts:
         all_gen = []
@@ -191,7 +191,7 @@ def make_sentence(mode, keywords):
                 current[spin:spin] = ["[MASK]"]
             all_gen.append("".join(current))
         gen_templates.append("，".join(all_gen) + "。[SEP]")
-    st.code(fill_mask(choice(gen_templates)))
+    return fill_mask(choice(gen_templates))
 
 if __name__ == "__main__":
     main()
