@@ -1,6 +1,6 @@
 torch
 transformers
-zhou
+zhon
 pypinyin
 pandas
 numpy
