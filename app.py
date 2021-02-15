@@ -152,6 +152,15 @@ if __name__ == "__main__":
     main()
 else:
     tokenizer, model = init()
+    
+from flask import Flask
+app = Flask(__name__)
+from flask import request
+
+@app.route('/', methods=['GET'])
+def make_sentences_serve():
+    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")])
+    return "%s %.2f" % (text, score)
 
         
 
