@@ -176,7 +176,7 @@ def main():
 
 def make_sentence(mode, keywords):
     keyword_lens = [len(x) for x in keywords]
-    valid_parts = list(partition_indexes(2, len(keywords)))
+    valid_parts = list(partition_indexes(len(mode) - 1, len(keywords)))
     valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
     st.write(valid_parts)
     gen_templates = []
