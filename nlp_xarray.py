@@ -158,6 +158,7 @@ def main():
         valid_parts = list(partition_indexes(2, len(keywords)))
         valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
         st.write(valid_parts)
+        gen_templates = []
         for part in valid_parts:
             all_gen = []
             for mode_value, left, right in zip(mode, part[:-1], part[1:]):
@@ -168,12 +169,8 @@ def main():
                     spin = randint(0, len(current))
                     current[spin:spin] = ["[MASK]"]
                 all_gen.append("".join(current))
-                
-                # for counts in partition_counts(mask_spin_counts, remain_mask_count, allow_zero=True):
-                #     for sep, mask_count in zip([""] + keywords[left:right], counts):
-                #         pass
-                #     st.code([part, left, right, counts])
-            st.code("，".join(all_gen))
+            gen_templates.append("，".join(all_gen) + "。[SEP]")
+        st.code(fill_mask(choice(gen_templates)))
         # for part in valid_parts:
         #     sub = []
         #     for mode_value, left, right in zip(mode, part[:-1], part[1:]):
