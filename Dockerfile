@@ -1,4 +1,4 @@
-FROM python:3.8.7
+FROM pytorch/pytorch
 
 # We copy just the requirements.txt first to leverage Docker cache
 COPY ./requirements.txt /app/requirements.txt
@@ -11,8 +11,8 @@ COPY . /app
 
 # RUN python -c "import app"
 
-ENTRYPOINT [ "flask" ]
-
 EXPOSE 5000
+
+ENTRYPOINT [ "flask" ]
 
 CMD [ "run", "--host", "0.0.0.0" ]
