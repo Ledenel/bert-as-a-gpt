@@ -5,6 +5,10 @@ COPY ./requirements.txt /app/requirements.txt
 
 WORKDIR /app
 
+RUN apt update
+
+RUN apt install -y gcc
+
 RUN pip install -i https://mirrors.bfsu.edu.cn/pypi/web/simple -r requirements.txt
 
 COPY . /app
