@@ -7,6 +7,7 @@ import scipy.special as sp
 import zhon.hanzi
 import zhon.pinyin
 from random import sample, randint, choice
+from stopwordsiso import stopwords
 
 def word_entropy(logits):
     softmaxes = xr.apply_ufunc(lambda t: -sp.log_softmax(t, axis=logits.dims.index("word")) ,logits)
@@ -70,7 +71,7 @@ def each_min(logit):
             yield i, ind
 
 
-def fill_mask(text, banned_words=()):
+def fill_mask(text, banned_words=(), allowed_words=()):
     extra_ban = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
     banned_words = list(banned_words) + extra_ban
     ent = []
@@ -80,7 +81,10 @@ def fill_mask(text, banned_words=()):
         logits = word_entropy(logits[0])
         origin = logits.coords["seq_words"]
         mask_locations = logits.coords["seq_words"] == "[MASK]"
-        logits = logits.drop_sel(word=banned_words, errors='ignore')
+        if allowed_words:
+            logits = logits.sel(word=list(allowed_words))
+        else:
+            logits = logits.drop_sel(word=banned_words, errors='ignore')
         logits = logits.sel(seq=mask_locations)
         val = logits.min(dim=["seq", "word"])
         min_item = logits.where(logits==val, drop=True).squeeze()
@@ -158,10 +162,24 @@ def main():
     tokenizer, model = st.cache(allow_output_mutation=True)(init)()
     with torch.no_grad():
         text = st.text_area("Input keywords:")
-        banned_self = st.checkbox("Banned self?")
-        mode = [5,7,5]
-        keywords = [x for x in text.split() if x.strip() != ""]
-        st.code([keywords, make_sentence(mode, keywords, ban_self=banned_self)])
+        if st.checkbox("hint mode?"):
+            text = text.strip()
+            text = text.replace(":", "：")
+            text = text.replace(";", "；")
+            text = text.replace(",", "，")
+            text = text.replace(".", "。")
+            text = text.replace("?", "？")
+            if text[-1] not in set("？。，：；") and randint(0,1) < 1:
+                text = text + choice("？。，：；")
+            template = "[MASK]" * 2 + choice(list("！"))
+            # st.code(set("".join(stopwords("zh"))))
+            text, score = fill_mask(text+template, allowed_words=tokenizer.tokenize(text))
+            st.code((text, score))
+        else:
+            banned_self = st.checkbox("Banned self?")
+            mode = [5,7,5]
+            keywords = [x for x in text.split() if x.strip() != ""]
+            st.code([keywords, make_sentence(mode, keywords, ban_self=banned_self)])
 
 if __name__ == "__main__":
     main()
@@ -182,4 +200,15 @@ def make_sentences_no_self():
     text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True)
     return "%s %s" % (text, score)
         
+@app.route('/hint', methods=['GET'])
+def make_hint():
+    text = request.args.get('question', '')
+    if text[-1] not in "？，：；“”":
+        text = text + "？"
+    template = "[MASK]" * randint(2,3) + choice("。！")
+    if  text[-1] not in "”" and randint(0, 1) < 1:
+        text = f"“{text}”"
+        template = f"“{template}”"
 
+    text, score = fill_mask(text+template, banned_words=tokenizer.tokenize(text))
+    return "%s %s" % (text, score)
