@@ -74,6 +74,7 @@ def fill_mask(text, banned_words=()):
     extra_ban = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
     banned_words = list(banned_words) + extra_ban
     ent = []
+    i = 1
     while "[MASK]" in text:
         logits, features, bias = my_model(text)
         logits = word_entropy(logits[0])
@@ -85,14 +86,16 @@ def fill_mask(text, banned_words=()):
         min_item = logits.where(logits==val, drop=True).squeeze()
         ent.append((
             min_item.coords["seq"].data,
+            i,
             min_item.coords["word"].data,
             float(min_item))
         )
         text = origin
         text[min_item.coords["seq"]] = min_item.coords["word"]
         text = "".join(str(x) for x in text.data)
+        i += 1
     ent.sort()
-    return text, " ".join('{}{:.2}'.format(x[1], x[2]) for x in ent)
+    return text, " ".join('{}{}{:.2}'.format(*x[1:]) for x in ent)
 
 import itertools
 
