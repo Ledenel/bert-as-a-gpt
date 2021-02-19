@@ -70,22 +70,29 @@ def each_min(logit):
             yield i, ind
 
 
-def fill_mask(text):
-    ent = 0
+def fill_mask(text, banned_words=()):
+    extra_ban = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
+    banned_words = list(banned_words) + extra_ban
+    ent = []
     while "[MASK]" in text:
         logits, features, bias = my_model(text)
         logits = word_entropy(logits[0])
         origin = logits.coords["seq_words"]
         mask_locations = logits.coords["seq_words"] == "[MASK]"
-        logits = logits.drop_sel(word=list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops), errors='ignore')
+        logits = logits.drop_sel(word=banned_words, errors='ignore')
         logits = logits.sel(seq=mask_locations)
         val = logits.min(dim=["seq", "word"])
         min_item = logits.where(logits==val, drop=True).squeeze()
-        ent += min_item
+        ent.append((
+            min_item.coords["seq"].data,
+            min_item.coords["word"].data,
+            float(min_item))
+        )
         text = origin
         text[min_item.coords["seq"]] = min_item.coords["word"]
         text = "".join(str(x) for x in text.data)
-    return text, float(ent)
+    ent.sort()
+    return text, " ".join('{}{:.2}'.format(x[1], x[2]) for x in ent)
 
 import itertools
 
@@ -114,7 +121,7 @@ config_dict = dict(
     # proxies={'http': os.environ["HTTP_PROXY"], 'https': os.environ["HTTPS_PROXY"]}
 )
 
-def make_sentence(mode, keywords):
+def make_sentence(mode, keywords, ban_self=False):
     keyword_lens = [len(x) for x in keywords]
     valid_parts = list(partition_indexes(len(mode) - 1, len(keywords)))
     valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
@@ -130,7 +137,11 @@ def make_sentence(mode, keywords):
                 current[spin:spin] = ["[MASK]"]
             all_gen.append("".join(current))
         gen_templates.append("[CLS]" + "，".join(all_gen) + "。[SEP]")
-    return fill_mask(choice(gen_templates))
+    extra = []
+    word_template = choice(gen_templates)
+    if ban_self:
+        extra = tokenizer.tokenize(word_template)
+    return fill_mask(word_template, banned_words=extra)
 
 # @st.cache(allow_output_mutation=True)
 def init():
@@ -144,9 +155,10 @@ def main():
     tokenizer, model = st.cache(allow_output_mutation=True)(init)()
     with torch.no_grad():
         text = st.text_area("Input keywords:")
+        banned_self = st.checkbox("Banned self?")
         mode = [5,7,5]
         keywords = [x for x in text.split() if x.strip() != ""]
-        st.code([keywords, make_sentence(mode, keywords)])
+        st.code([keywords, make_sentence(mode, keywords, ban_self=banned_self)])
 
 if __name__ == "__main__":
     main()
@@ -160,7 +172,11 @@ from flask import request
 @app.route('/', methods=['GET'])
 def make_sentences_serve():
     text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")])
-    return "%s %.2f" % (text, score)
+    return "%s %s" % (text, score)
 
+@app.route('/no_self', methods=['GET'])
+def make_sentences_no_self():
+    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True)
+    return "%s %s" % (text, score)
         
 
