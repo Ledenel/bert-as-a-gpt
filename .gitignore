@@ -1,5 +1,5 @@
 data
-cache
+# cache
 .vscode
 
 # Byte-compiled / optimized / DLL files
