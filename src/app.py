@@ -1,3 +1,4 @@
+import functools
 from transformers import AutoModelWithLMHead, AutoTokenizer
 import os
 import torch
@@ -6,6 +7,7 @@ import xarray as xr
 import scipy.special as sp
 import zhon.hanzi
 import zhon.pinyin
+import zhon.cedict
 from random import sample, randint, choice
 from stopwordsiso import stopwords
 
@@ -70,25 +72,29 @@ def each_min(logit):
             ind = logit.sel(seq=i).idxmin(dim="word")
             yield i, ind
 
+@functools.lru_cache()
+def extra_ban():
+    tokens = tokenizer.convert_ids_to_tokens(range(len(tokenizer.vocab)))
+    # banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
+    # banned_words += [x for x in tokens if x.startswith("#")]
+#     banned_words += [x for x in tokens if any(c in set("""
+#     あ ア	い イ	う ウ	え エ	お オ
+# 	か カ	き キ	く ク	け ケ	こ コ
+# 	さ サ	し シ	す ス	せ セ	そ ソ
+# 	た タ	ち チ	つ ツ	て テ	と ト
+# 	な ナ	に ニ	ぬ ヌ	ね ネ	の ノ
+# 	は ハ	ひ ヒ	ふ フ	へ ヘ	ほ ホ
+# 	ま マ	み ミ	む ム	め メ	も モ
+# 	や ヤ		ゆ ユ		よ ヨ
+# 	ら ラ	り リ	る ル	れ レ	ろ ロ
+# 	わ ワ				を ヲ
+# ん ン
+# """) for c in x)]
+    banned_words = [x for x in tokens if x not in set(zhon.cedict.all)]
+    return banned_words
 
 def fill_mask(text, banned_words=(), allowed_words=(), unique=False):
-    extra_ban = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
-    banned_words = list(banned_words) + extra_ban
-    tokens = tokenizer.convert_ids_to_tokens(range(len(tokenizer.vocab)))
-    banned_words += [x for x in tokens if x.startswith("#")]
-    banned_words += [x for x in tokens if any(c in set("""
-    あ ア	い イ	う ウ	え エ	お オ
-	か カ	き キ	く ク	け ケ	こ コ
-	さ サ	し シ	す ス	せ セ	そ ソ
-	た タ	ち チ	つ ツ	て テ	と ト
-	な ナ	に ニ	ぬ ヌ	ね ネ	の ノ
-	は ハ	ひ ヒ	ふ フ	へ ヘ	ほ ホ
-	ま マ	み ミ	む ム	め メ	も モ
-	や ヤ		ゆ ユ		よ ヨ
-	ら ラ	り リ	る ル	れ レ	ろ ロ
-	わ ワ				を ヲ
-ん ン
-""") for c in x)]
+    banned_words = list(banned_words) + extra_ban()
     ent = []
     i = 1
     while "[MASK]" in text:
@@ -202,7 +208,9 @@ if __name__ == "__main__":
     main()
 else:
     tokenizer, model = init()
-    
+
+extra_ban()
+
 from flask import Flask
 app = Flask(__name__)
 from flask import request
