@@ -75,8 +75,8 @@ def each_min(logit):
 @functools.lru_cache()
 def extra_ban():
     tokens = tokenizer.convert_ids_to_tokens(range(len(tokenizer.vocab)))
-    # banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
-    # banned_words += [x for x in tokens if x.startswith("#")]
+    banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
+    banned_words += [x for x in tokens if x.startswith("#")]
 #     banned_words += [x for x in tokens if any(c in set("""
 #     あ ア	い イ	う ウ	え エ	お オ
 # 	か カ	き キ	く ク	け ケ	こ コ
