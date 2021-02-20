@@ -71,7 +71,7 @@ def each_min(logit):
             yield i, ind
 
 
-def fill_mask(text, banned_words=(), allowed_words=()):
+def fill_mask(text, banned_words=(), allowed_words=(), unique=False):
     extra_ban = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
     banned_words = list(banned_words) + extra_ban
     ent = []
@@ -94,6 +94,8 @@ def fill_mask(text, banned_words=(), allowed_words=()):
             min_item.coords["word"].data,
             float(min_item))
         )
+        if unique:
+            banned_words.append(str(min_item.coords["word"].data))
         text = origin
         text[min_item.coords["seq"]] = min_item.coords["word"]
         text = "".join(str(x) for x in text.data)
@@ -128,7 +130,7 @@ config_dict = dict(
     # proxies={'http': os.environ["HTTP_PROXY"], 'https': os.environ["HTTPS_PROXY"]}
 )
 
-def make_sentence(mode, keywords, ban_self=False):
+def make_sentence(mode, keywords, ban_self=False, unique=False):
     keyword_lens = [len(x) for x in keywords]
     valid_parts = list(partition_indexes(len(mode) - 1, len(keywords)))
     valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
@@ -148,7 +150,7 @@ def make_sentence(mode, keywords, ban_self=False):
     word_template = choice(gen_templates)
     if ban_self:
         extra = tokenizer.tokenize(word_template)
-    return fill_mask(word_template, banned_words=extra)
+    return fill_mask(word_template, banned_words=extra, unique=unique)
 
 # @st.cache(allow_output_mutation=True)
 def init():
@@ -197,7 +199,7 @@ def make_sentences_serve():
 
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
-    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True)
+    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True, unique=True)
     return "%s %s" % (text, score)
         
 @app.route('/hint', methods=['GET'])
