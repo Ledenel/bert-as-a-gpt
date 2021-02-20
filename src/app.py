@@ -76,7 +76,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False):
     banned_words = list(banned_words) + extra_ban
     tokens = tokenizer.convert_ids_to_tokens(range(len(tokenizer.vocab)))
     banned_words += [x for x in tokens if x.startswith("#")]
-    banned_words += list("""
+    banned_words += [x for x in tokens if any(c in set("""
     あ ア	い イ	う ウ	え エ	お オ
 	か カ	き キ	く ク	け ケ	こ コ
 	さ サ	し シ	す ス	せ セ	そ ソ
@@ -88,7 +88,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False):
 	ら ラ	り リ	る ル	れ レ	ろ ロ
 	わ ワ				を ヲ
 ん ン
-""")
+""") for c in x)]
     ent = []
     i = 1
     while "[MASK]" in text:
