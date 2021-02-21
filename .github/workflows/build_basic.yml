@@ -27,4 +27,3 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           dockerfile: basic.Dockerfile
           repository: ledenel/zh-nlp-basic
-          tag_with_ref: true
