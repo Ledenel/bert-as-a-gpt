@@ -1,4 +1,4 @@
-FROM ledenel/zh-nlp-basic
+FROM ledenel/zh-nlp-basic:main
 
 WORKDIR /app
 
