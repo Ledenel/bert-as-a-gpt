@@ -13,5 +13,5 @@ COPY ./src/requirements-basic.txt /app/requirements-basic.txt
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir -i https://mirrors.bfsu.edu.cn/pypi/web/simple -r requirements-basic.txt
+RUN pip install --no-cache-dir -r requirements-basic.txt
 
