@@ -24,10 +24,13 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v2
+      - uses: satackey/action-docker-layer-caching@v0.0.11
+        # Ignore the failure of a step and avoid terminating the job.
+        continue-on-error: true
       - name: Push to Docker Hub
         uses: docker/build-push-action@v1
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: ledenel/zh-nlp
+          repository: ledenel/zh-nlp-full
           tag_with_ref: true
