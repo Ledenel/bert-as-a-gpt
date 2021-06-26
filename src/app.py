@@ -180,7 +180,7 @@ def init():
     return tokenizer, model
 
 def main():
-    global tokenizer, model
+    from init import tokenizer, model
     import streamlit as st
     tokenizer, model = st.cache(allow_output_mutation=True)(init)()
     with torch.no_grad():
@@ -207,7 +207,7 @@ def main():
 if __name__ == "__main__":
     main()
 else:
-    tokenizer, model = init()
+    from init import tokenizer, model
 
 extra_ban()
 
