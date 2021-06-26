@@ -10,9 +10,9 @@ config_dict = dict(
 
 # @st.cache(allow_output_mutation=True)
 def init():
-    tokenizer = AutoTokenizer.from_pretrained("hfl/chinese-bert-wwm-ext", **config_dict)
-    model = AutoModelForMaskedLM.from_pretrained("hfl/chinese-bert-wwm-ext", **config_dict)
+    tokenizer = AutoTokenizer.from_pretrained("nghuyong/ernie-1.0", **config_dict)
+    model = AutoModelForMaskedLM.from_pretrained("nghuyong/ernie-1.0", **config_dict)
     return tokenizer, model
-
+    
 tokenizer, model = init()
 
