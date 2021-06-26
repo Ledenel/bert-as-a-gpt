@@ -17,8 +17,6 @@ COPY ./src/init.py /app/init.py
 
 RUN python init.py
 
-COPY ./cache /app/cache
-
 WORKDIR /app
 
 COPY ./src/requirements.txt /app/requirements.txt
