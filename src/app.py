@@ -34,7 +34,8 @@ def my_model(*texts):
     splited_ranges = [list(range(len(x))) for x in splited_texts]
     output = model(torch.tensor(splited_ids), output_hidden_states=True)
     bias = model.cls.predictions.decoder.bias
-    token_strs = tokenizer.convert_ids_to_tokens(range(len(bias)))
+    token_strs = ["<ERROR%s>" % i if x is None else x for i,x in enumerate(tokenizer.convert_ids_to_tokens(range(len(bias))))]
+
     logits = xr.DataArray(
         output.logits.detach().numpy(),
         coords={
@@ -175,14 +176,11 @@ def make_sentence(mode, keywords, ban_self=False, unique=False):
     return fill_mask(word_template, banned_words=extra, unique=unique)
 
 # @st.cache(allow_output_mutation=True)
-def init():
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese", **config_dict)
-    model = AutoModelWithLMHead.from_pretrained("bert-base-chinese", **config_dict)
-    return tokenizer, model
 
 def main():
-    from init import tokenizer, model
+    from init import init
     import streamlit as st
+    global tokenizer, model
     tokenizer, model = st.cache(allow_output_mutation=True)(init)()
     with torch.no_grad():
         text = st.text_area("Input keywords:")
