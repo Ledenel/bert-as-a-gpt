@@ -75,7 +75,7 @@ def each_min(logit):
 @functools.lru_cache()
 def extra_ban():
     tokens = tokenizer.convert_ids_to_tokens(range(len(tokenizer.vocab)))
-    banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops)
+    banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops) + ["、"]
     banned_words += [x for x in tokens if x.startswith("#")]
 #     banned_words += [x for x in tokens if any(c in set("""
 #     あ ア	い イ	う ウ	え エ	お オ
@@ -153,7 +153,7 @@ config_dict = dict(
 
 def make_sentence(mode, keywords, ban_self=False, unique=False):
     keyword_lens = [len(x) for x in keywords]
-    valid_parts = list(partition_indexes(len(mode) - 1, len(keywords)))
+    valid_parts = list(partition_indexes(len(mode) - 1, len(keywords), allow_zero=True))
     valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
     gen_templates = []
     for part in valid_parts:
