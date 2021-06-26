@@ -34,3 +34,5 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ledenel/zh-nlp-full
           tag_with_ref: true
+      - name: prune docker images
+        run: docker image prune -f
