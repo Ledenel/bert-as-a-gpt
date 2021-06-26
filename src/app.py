@@ -136,7 +136,7 @@ def check_partitions(mode, lens, part):
 
 def partition_indexes(k, sum, allow_zero=False):
     if allow_zero:
-        comb = itertools.combinations_with_replacement(range(0, sum), k)
+        comb = itertools.combinations_with_replacement(range(0, sum+1), k)
     else:
         comb = itertools.combinations(range(1, sum), k)
     return (([0] + list(partitions) + [sum]) for partitions in comb)
