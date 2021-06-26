@@ -1,5 +1,5 @@
 import functools
-from transformers import AutoModelWithLMHead, AutoTokenizer
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 config_dict = dict(
     cache_dir="cache",
@@ -10,8 +10,8 @@ config_dict = dict(
 
 # @st.cache(allow_output_mutation=True)
 def init():
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese", **config_dict)
-    model = AutoModelWithLMHead.from_pretrained("bert-base-chinese", **config_dict)
+    tokenizer = AutoTokenizer.from_pretrained("hfl/chinese-bert-wwm-ext", **config_dict)
+    model = AutoModelForMaskedLM.from_pretrained("hfl/chinese-bert-wwm-ext", **config_dict)
     return tokenizer, model
 
 tokenizer, model = init()
