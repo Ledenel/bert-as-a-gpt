@@ -75,7 +75,7 @@ def each_min(logit):
 @functools.lru_cache()
 def extra_ban():
     tokens = tokenizer.convert_ids_to_tokens(range(len(tokenizer.vocab)))
-    banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops) + ["、"]
+    banned_words = list(zhon.hanzi.punctuation) + list(tokenizer.all_special_tokens) + ["...", "．"] + list(zhon.pinyin.non_stops) + list(zhon.pinyin.stops) + ["、", "、"]
     banned_words += [x for x in tokens if x.startswith("#")]
 #     banned_words += [x for x in tokens if any(c in set("""
 #     あ ア	い イ	う ウ	え エ	お オ
@@ -134,7 +134,7 @@ def check_partitions(mode, lens, part):
 
 def partition_indexes(k, sum, allow_zero=False):
     if allow_zero:
-        comb = itertools.combinations_with_replacement(range(1, sum), k)
+        comb = itertools.combinations_with_replacement(range(0, sum), k)
     else:
         comb = itertools.combinations(range(1, sum), k)
     return (([0] + list(partitions) + [sum]) for partitions in comb)
