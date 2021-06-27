@@ -3,6 +3,7 @@ from transformers import AutoModelWithLMHead, AutoTokenizer
 import os
 import torch
 import numpy as np
+import pandas as pd
 import xarray as xr
 import scipy.special as sp
 import zhon.hanzi
@@ -95,7 +96,7 @@ def extra_ban():
     banned_words = [x for x in tokens if x not in set(zhon.cedict.all)] + ["、"]
     return banned_words
 
-def fill_mask(text, banned_words=(), allowed_words=(), unique=False):
+def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16):
     banned_words = list(banned_words) + extra_ban()
     ent = []
     i = 1
@@ -110,6 +111,9 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False):
             logits = logits.drop_sel(word=banned_words, errors='ignore')
         logits = logits.sel(seq=mask_locations)
         val = logits.min(dim=["seq", "word"])
+        top_k_val = logits.to_dataframe(name="ent").sort_values("ent")[:top_k]
+        top_k_val_item = top_k_val.sample(n=1, weights=np.exp(-top_k_val["ent"]))
+        val = top_k_val_item["ent"].to_list()[0]
         min_item = logits.where(logits==val, drop=True).squeeze()
         ent.append((
             min_item.coords["seq"].data,
@@ -153,7 +157,7 @@ config_dict = dict(
     # proxies={'http': os.environ["HTTP_PROXY"], 'https': os.environ["HTTPS_PROXY"]}
 )
 
-def make_sentence(mode, keywords, ban_self=False, unique=False):
+def make_sentence(mode, keywords, ban_self=False, unique=False, top_k=16):
     keyword_lens = [len(x) for x in keywords]
     valid_parts = list(partition_indexes(len(mode) - 1, len(keywords), allow_zero=True))
     valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
@@ -173,7 +177,7 @@ def make_sentence(mode, keywords, ban_self=False, unique=False):
     word_template = choice(gen_templates)
     if ban_self:
         extra = tokenizer.tokenize(word_template)
-    return fill_mask(word_template, banned_words=extra, unique=unique)
+    return fill_mask(word_template, banned_words=extra, unique=unique, top_k=top_k)
 
 # @st.cache(allow_output_mutation=True)
 
@@ -221,7 +225,8 @@ def make_sentences_serve():
 
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
-    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True, unique=True)
+    top_k = int(request.args.get('rand_top', '16'))
+    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True, unique=True, top_k=top_k)
     return "%s %s" % (text, score)
         
 @app.route('/hint', methods=['GET'])
