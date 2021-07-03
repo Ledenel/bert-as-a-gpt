@@ -157,26 +157,70 @@ config_dict = dict(
     # proxies={'http': os.environ["HTTP_PROXY"], 'https': os.environ["HTTPS_PROXY"]}
 )
 
-def make_sentence(mode, keywords, ban_self=False, unique=False, top_k=16):
+import re
+number_pattern = re.compile("([0-9]+)(\\-([0-9]+))?(\\-([0-9]+))?")
+
+def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16):
+    mode_matched_indexes = [i for matched in number_pattern.finditer(mode_str) for i in matched.span()]
+    mode_matched_indexes.append(0)
+    mode_matched_indexes.append(len(mode_str))
+    mode_matched_indexes = list(set(mode_matched_indexes))
+    mode_matched_indexes.sort()
+    mode = [mode_str[left:right] for left, right in zip(mode_matched_indexes[:-1], mode_matched_indexes[1:])]
+    mode = [x for x in mode if x.strip()]
+    mode_matched = [(i, number_pattern.match(x).groups()) for i, x in enumerate(mode) if number_pattern.match(x)]
+
+    mode_match_index, mode_match_nums = zip(*mode_matched)
+    mode_mask_min_nums = []
+    mode_keyword_max_nums = []
+    mode_mask_max_nums = []
+    for mode_mask_min, _, mode_keyword_max, _, mode_mask_max in mode_match_nums:
+        if mode_keyword_max is None:
+            mode_keyword_max = mode_mask_min
+        if mode_mask_max is None:
+            mode_mask_max = mode_mask_min
+        mode_mask_min = int(mode_mask_min)
+        mode_keyword_max = int(mode_keyword_max)
+        mode_mask_max = int(mode_mask_max)
+        if mode_mask_max < mode_mask_min:
+            mode_mask_max, mode_mask_min = mode_mask_min, mode_mask_max
+        mode_mask_min_nums.append(mode_mask_min)
+        mode_keyword_max_nums.append(mode_keyword_max)
+        mode_mask_max_nums.append(mode_mask_max)
+    assert sum(mode_mask_max_nums) <= 100
+    print(mode_mask_min_nums, mode_keyword_max_nums, mode_mask_max_nums)
+    #mode = ui
     keyword_lens = [len(x) for x in keywords]
-    valid_parts = list(partition_indexes(len(mode) - 1, len(keywords), allow_zero=True))
-    valid_parts = [x for x in valid_parts if check_partitions(mode, keyword_lens, x)]
+    valid_parts = list(partition_indexes(len(mode_keyword_max_nums) - 1, len(keywords), allow_zero=False))
+    print(valid_parts)
+    if not valid_parts:
+        assert len(mode_keyword_max_nums) - len(keywords) > 0
+        # not enough keyword to fill in mode, fill left-to-right by default
+        valid_parts = list(range(len(keywords)))
+        valid_parts.extend([valid_parts[-1] + 1] * (len(mode_keyword_max_nums) - len(keywords) + 1))
+        valid_parts = [valid_parts]
+        print(valid_parts)
+    valid_parts = [x for x in valid_parts if check_partitions(mode_keyword_max_nums, keyword_lens, x)]
     gen_templates = []
     for part in valid_parts:
         all_gen = []
-        for mode_value, left, right in zip(mode, part[:-1], part[1:]):
-            mask_spin_counts = right - left + 1
-            remain_mask_count = mode_value - sum(keyword_lens[left:right])
+        for max_mode_value, min_mode_value, left, right in zip(mode_mask_max_nums, mode_mask_min_nums, part[:-1], part[1:]):
+            max_remain_mask_count = max(max_mode_value - sum(keyword_lens[left:right]), 0)
+            min_remain_mask_count = max(min_mode_value - sum(keyword_lens[left:right]), 0)
             current = keywords[left:right]
-            for _ in range(remain_mask_count):
+            for _ in range(randint(min_remain_mask_count, max_remain_mask_count)):
                 spin = randint(0, len(current))
                 current[spin:spin] = ["[MASK]"]
-            all_gen.append("".join(current))
-        gen_templates.append("[CLS]" + "，".join(all_gen) + "。[SEP]")
+            all_gen.append("".join(current).replace("?", "[MASK]").replace("？", "[MASK]"))
+        template = mode.copy()
+        for index, part in zip(mode_match_index, all_gen):
+            template[index] = part
+        gen_templates.append("[CLS]" + "".join(template) + "[SEP]")
     extra = []
     word_template = choice(gen_templates)
     if ban_self:
         extra = tokenizer.tokenize(word_template)
+    word_template = word_template
     return fill_mask(word_template, banned_words=extra, unique=unique, top_k=top_k)
 
 # @st.cache(allow_output_mutation=True)
@@ -226,7 +270,8 @@ def make_sentences_serve():
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
     top_k = int(request.args.get('rand_top', '16'))
-    text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")], ban_self=True, unique=True, top_k=top_k)
+    template = request.args.get('template', "5，7，5。")
+    text, score = make_sentence(template, [x for x in request.args.get('keywords', '').split(",")], ban_self=True, unique=True, top_k=top_k)
     return "%s %s" % (text, score)
         
 @app.route('/hint', methods=['GET'])
