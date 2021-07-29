@@ -145,7 +145,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, s
             top_k_val = ent_index_sr.sort_values(ascending=False)
             if top_rate < 1:
                 exp_item = np.exp(top_k_val)
-                exp_item_rate = exp_item / exp_item.cumsum()
+                exp_item_rate = exp_item / exp_item.max()
                 exp_item_mask = exp_item_rate >= 1 - top_rate
                 print("top_rate from", len(exp_item_mask), "to", exp_item_mask.sum())
                 top_k_val = top_k_val[exp_item_mask]
