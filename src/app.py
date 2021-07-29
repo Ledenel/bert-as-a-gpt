@@ -95,38 +95,67 @@ def extra_ban():
 
     banned_words = [x for x in tokens if x not in set(zhon.cedict.all)] + ["、"]
     return banned_words
+import torch
 
 def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16):
     banned_words = list(banned_words) + extra_ban()
+    filter_ids = tokenizer.convert_tokens_to_ids(banned_words)
+    special_ids = tokenizer.convert_tokens_to_ids(list(tokenizer.special_tokens_map.values()))
     ent = []
     i = 1
-    while "[MASK]" in text:
-        logits, features, bias = my_model(text)
-        logits = word_entropy(logits[0])
-        origin = logits.coords["seq_words"]
-        mask_locations = logits.coords["seq_words"] == "[MASK]"
-        if allowed_words:
-            logits = logits.sel(word=list(allowed_words))
-        else:
-            logits = logits.drop_sel(word=banned_words, errors='ignore')
-        logits = logits.sel(seq=mask_locations)
-        val = logits.min(dim=["seq", "word"])
-        top_k_val = logits.to_dataframe(name="ent").sort_values("ent")[:top_k]
-        top_k_val_item = top_k_val.sample(n=1, weights=np.exp(-top_k_val["ent"]))
-        val = top_k_val_item["ent"].to_list()[0]
-        min_item = logits.where(logits==val, drop=True).squeeze()
-        ent.append((
-            min_item.coords["seq"].data,
-            i,
-            min_item.coords["word"].data,
-            float(min_item))
-        )
-        if unique:
-            banned_words.append(str(min_item.coords["word"].data))
-        text = origin
-        text[min_item.coords["seq"]] = min_item.coords["word"]
-        text = "".join(str(x) for x in text.data)
-        i += 1
+    mask_str = tokenizer.special_tokens_map["mask_token"]
+    mask_token_id = tokenizer.convert_tokens_to_ids(mask_str)
+    with torch.no_grad():
+        while "[MASK]" in text:
+            filter_ids = tokenizer.convert_tokens_to_ids(banned_words)
+            print("processing", text)
+            tokenized_batch = tokenizer([text])
+            logits = model(**tokenized_batch.convert_to_tensors("pt"))
+            logits = logits.logits[0] # pick first item, only one
+            neg_inf = logits.min() - 10000000 # margin
+            print("neg inf", neg_inf)
+            mask_location_pt = tokenized_batch.convert_to_tensors("pt").input_ids[0] == mask_token_id
+            logits[:, filter_ids] = neg_inf # remove banned words
+            logits[:, special_ids] = neg_inf # remove special tokens
+            # FIXME: can't remove here, since softmaxed result is equal-probability.
+            # logits[~mask_location_pt, :] = neg_inf # remove un-masked words
+            topk = torch.topk(logits, k=top_k, dim=1)
+            topk_i_ind = topk.indices.clone()
+            topk_i_ind[:, :] = torch.arange(topk_i_ind.shape[0]).unsqueeze(-1)
+            topk_coo = torch.stack([topk_i_ind.view(-1), topk.indices.view(-1)])
+            logits = torch.sparse_coo_tensor(topk_coo, topk.values.view(-1), logits.shape) # clip logits to top-k
+            logits = torch.sparse.log_softmax(logits, 1) # softmax it
+            
+            decreased_by_word_pow = torch.bincount(tokenized_batch.convert_to_tensors("pt").input_ids[0], minlength=logits.shape[-1]).unsqueeze(0) + 1
+
+            ent_index_sr = pd.Series(index=list(logits.coalesce().indices().detach().numpy()), data=logits.coalesce().values().detach().numpy())
+
+            mask_location_pt_where, *_ = torch.where(mask_location_pt)
+            ent_index_sr_is_mask = pd.Series(ent_index_sr.index.get_level_values(0)).isin(mask_location_pt_where.detach().numpy()).values
+            ent_index_sr = ent_index_sr[ent_index_sr_is_mask]
+            top_k_val = ent_index_sr.sort_values(ascending=False)[:top_k]
+            top_k_val_item = top_k_val.sample(n=1, weights=np.exp(top_k_val))
+            top_k_val_item = list(top_k_val_item.to_dict().items())[0]
+            idx_pack, log_p = top_k_val_item
+            seq_id, word_id = idx_pack
+            word_text = tokenizer.convert_ids_to_tokens(word_id)
+            seq_ids_origin = tokenized_batch[0].ids.copy()
+            seq_ids_origin[seq_id] = word_id # replace word with generated, before seq id changed
+            seq_ids_origin = seq_ids_origin[1:-1] # remove [CLS] and [SEP]
+            seq_texts = tokenizer.convert_ids_to_tokens(seq_ids_origin)
+
+            ent.append((
+                seq_id,
+                i,
+                word_text,
+                float(np.exp(log_p)))
+            )
+            if unique:
+                banned_words.append(word_text)
+            text = "".join(seq_texts)
+            # text[min_item.coords["seq"]] = min_item.coords["word"]
+            # text = "".join(str(x) for x in text.data)
+            i += 1
     ent.sort()
     return text, " ".join('{}{}{:.2}'.format(*x[1:]) for x in ent)
 
@@ -215,7 +244,7 @@ def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16):
         template = mode.copy()
         for index, part in zip(mode_match_index, all_gen):
             template[index] = part
-        gen_templates.append("[CLS]" + "".join(template) + "[SEP]")
+        gen_templates.append("".join(template))
     extra = []
     word_template = choice(gen_templates)
     if ban_self:
