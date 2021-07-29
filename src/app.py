@@ -318,7 +318,7 @@ def make_sentences_no_self():
     top_k = int(request.args.get('rand_top', '16'))
     template = request.args.get('template', "5，7，5。")
     unique_mode = request.args.get('mode', "soft")
-    top_rate = float(request.args.get('top_rate', "0.95"))
+    top_rate = float(request.args.get('top_rate', "0.99"))
     ban_self = unique_mode == "hard"
     unique = unique_mode == "hard"
     soft_unique = unique_mode == "soft"
