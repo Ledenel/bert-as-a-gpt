@@ -97,7 +97,11 @@ def extra_ban():
     return banned_words
 import torch
 
-def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16):
+# workaround from https://github.com/pytorch/pytorch/issues/46307#issuecomment-708492144
+def sparse_mul(a, S):
+    return torch.mul(a.expand(S.shape).sparse_mask(S.coalesce()), S)
+
+def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, soft_unique=False, top_rate=1):
     banned_words = list(banned_words) + extra_ban()
     filter_ids = tokenizer.convert_tokens_to_ids(banned_words)
     special_ids = tokenizer.convert_tokens_to_ids(list(tokenizer.special_tokens_map.values()))
@@ -128,12 +132,25 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16):
             
             decreased_by_word_pow = torch.bincount(tokenized_batch.convert_to_tensors("pt").input_ids[0], minlength=logits.shape[-1]).unsqueeze(0) + 1
 
+            if soft_unique:
+                print(logits.shape, "*", decreased_by_word_pow.shape)
+                logits = sparse_mul(decreased_by_word_pow, logits) # make word with n-count P(word) ^ n, which is equalivant to n * log(P(word))
+                logits = torch.sparse.log_softmax(logits, 1) # re-softmax the logits
+
             ent_index_sr = pd.Series(index=list(logits.coalesce().indices().detach().numpy()), data=logits.coalesce().values().detach().numpy())
 
             mask_location_pt_where, *_ = torch.where(mask_location_pt)
             ent_index_sr_is_mask = pd.Series(ent_index_sr.index.get_level_values(0)).isin(mask_location_pt_where.detach().numpy()).values
             ent_index_sr = ent_index_sr[ent_index_sr_is_mask]
-            top_k_val = ent_index_sr.sort_values(ascending=False)[:top_k]
+            top_k_val = ent_index_sr.sort_values(ascending=False)
+            if top_rate < 1:
+                exp_item = np.exp(top_k_val)
+                exp_item_rate = exp_item / exp_item.cumsum()
+                exp_item_mask = exp_item_rate >= 1 - top_rate
+                print("top_rate from", len(exp_item_mask), "to", exp_item_mask.sum())
+                top_k_val = top_k_val[exp_item_mask]
+                
+            top_k_val = top_k_val[:top_k]
             top_k_val_item = top_k_val.sample(n=1, weights=np.exp(top_k_val))
             top_k_val_item = list(top_k_val_item.to_dict().items())[0]
             idx_pack, log_p = top_k_val_item
@@ -157,7 +174,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16):
             # text = "".join(str(x) for x in text.data)
             i += 1
     ent.sort()
-    return text, " ".join('{}{}{:.2}'.format(*x[1:]) for x in ent)
+    return text, " ".join('{}{}{:.3}'.format(*x[1:]) for x in ent)
 
 import itertools
 
@@ -189,7 +206,7 @@ config_dict = dict(
 import re
 number_pattern = re.compile("([0-9]+)(\\-([0-9]+))?(\\-([0-9]+))?")
 
-def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16):
+def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, **kwargs):
     mode_matched_indexes = [i for matched in number_pattern.finditer(mode_str) for i in matched.span()]
     mode_matched_indexes.append(0)
     mode_matched_indexes.append(len(mode_str))
@@ -250,7 +267,7 @@ def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16):
     if ban_self:
         extra = tokenizer.tokenize(word_template)
     word_template = word_template
-    return fill_mask(word_template, banned_words=extra, unique=unique, top_k=top_k)
+    return fill_mask(word_template, banned_words=extra, unique=unique, top_k=top_k, **kwargs)
 
 # @st.cache(allow_output_mutation=True)
 
@@ -300,7 +317,13 @@ def make_sentences_serve():
 def make_sentences_no_self():
     top_k = int(request.args.get('rand_top', '16'))
     template = request.args.get('template', "5，7，5。")
-    text, score = make_sentence(template, [x for x in request.args.get('keywords', '').split(",")], ban_self=True, unique=True, top_k=top_k)
+    unique_mode = request.args.get('mode', "soft")
+    top_rate = float(request.args.get('top_rate', "0.95"))
+    ban_self = unique_mode == "hard"
+    unique = unique_mode == "hard"
+    soft_unique = unique_mode == "soft"
+
+    text, score = make_sentence(template, [x for x in request.args.get('keywords', '').split(",")], ban_self=ban_self, unique=unique, top_k=top_k, soft_unique=soft_unique, top_rate=top_rate)
     return "%s %s" % (text, score)
         
 @app.route('/hint', methods=['GET'])
