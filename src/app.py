@@ -108,7 +108,7 @@ def sparse_mul(a, S):
 def torch_solve(func, x, opt=torch.optim.Adam, epoch=24):
     with torch.enable_grad():
         x = torch.tensor(x, requires_grad=True)
-        opt = opt(lr=0.5, params=[x])
+        opt = opt(lr=0.1, params=[x])
         for _ in range(epoch):
             opt.zero_grad()
             result = func(x)
@@ -139,7 +139,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, s
             temperature = torch.ones((logits.shape[0], 1))
             thr = math.log(0.8)
             def temperature_equation(temp):
-                temp = torch.nn.functional.sigmoid(temp)
+                # temp = torch.nn.functional.sigmoid(temp)
                 logits_mod = temp * logits
                 softmaxed = torch.nn.functional.log_softmax(logits_mod, 1)
                 max_item = softmaxed.max(axis=1).values
