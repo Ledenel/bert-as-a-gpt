@@ -253,6 +253,12 @@ number_pattern = re.compile("([0-9]+)(\\-([0-9]+))?(\\-([0-9]+))?")
 from itertools import permutations
 import traceback
 
+import random
+def shuffled(l):
+    l = l.copy()
+    random.shuffle(l)
+    return l
+
 def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, rand=False, **kwargs):
     mode_matched_indexes = [i for matched in number_pattern.finditer(mode_str) for i in matched.span()]
     mode_matched_indexes.append(0)
@@ -286,7 +292,25 @@ def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, ra
     if rand:
         keywords_empty = ["" for _ in mode_matched]
         keywords_empty[:len(keywords)] = keywords
-        keyword_groups = [list(x) for x in set(permutations(keywords_empty, len(keywords_empty)))]
+        # find a solution: greedy match
+        mode_matched_sorted = sorted(enumerate(mode_keyword_max_nums), key=lambda t: -t[1])
+        keyword_lens = [len(alphanums.sub("#", x)) for x in keywords_empty]
+        keyword_lens_sorted = sorted(enumerate(keyword_lens), key=lambda t: -t[1])
+        matched = all(kw_max >= kw_len for (_, kw_max), (_, kw_len) in zip(mode_matched_sorted, keyword_lens_sorted))
+        if not matched:
+            keyword_groups = []
+        else:
+            for _ in range(100):
+                keyword_lens_sorted_new = keyword_lens_sorted.copy()
+
+                # shuffle
+                i, j = random.sample(list(range(len(keyword_lens_sorted_new))), 2)
+                keyword_lens_sorted_new[i], keyword_lens_sorted_new[j] = keyword_lens_sorted_new[j], keyword_lens_sorted_new[i]
+                if all(kw_max >= kw_len for (_, kw_max), (_, kw_len) in zip(mode_matched_sorted, keyword_lens_sorted_new)):
+                    keyword_lens_sorted = keyword_lens_sorted_new
+        final_group = [(group_id, keywords_empty[kw_id]) for (group_id, _),  (kw_id, _) in zip(mode_matched_sorted, keyword_lens_sorted)]
+        final_group.sort()
+        keyword_groups = [[kw for _, kw in final_group]]
     else:
         keyword_groups = [keywords]
     print(keyword_groups)
