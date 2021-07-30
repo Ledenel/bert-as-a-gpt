@@ -151,7 +151,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, s
             )
             """
 
-            thr = math.log(0.8)
+            thr = math.log(0.9)
             temp = torch.clamp(torch.nn.functional.log_softmax(logits, 1).max(axis=1).values / thr, min=0, max=1)
             temp = temp.unsqueeze(-1)
             print(temp.flatten())
@@ -380,7 +380,7 @@ def make_sentences_serve():
     return "%s %s" % (text, score)
 
 import os
-if str(os.environ["FLASK_DEBUG"]) == "1":
+if "FLASK_DEBUG" in os.environ and str(os.environ["FLASK_DEBUG"]) == "1":
     pass
 else:
     @app.errorhandler(Exception)
