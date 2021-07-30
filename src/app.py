@@ -206,7 +206,10 @@ config_dict = dict(
 import re
 number_pattern = re.compile("([0-9]+)(\\-([0-9]+))?(\\-([0-9]+))?")
 
-def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, **kwargs):
+from itertools import permutations
+import traceback
+
+def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, rand=False, **kwargs):
     mode_matched_indexes = [i for matched in number_pattern.finditer(mode_str) for i in matched.span()]
     mode_matched_indexes.append(0)
     mode_matched_indexes.append(len(mode_str))
@@ -236,7 +239,31 @@ def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, **
     assert sum(mode_mask_max_nums) <= 100
     print(mode_mask_min_nums, mode_keyword_max_nums, mode_mask_max_nums)
     #mode = ui
-    keyword_lens = [len(x) for x in keywords]
+    if rand:
+        keywords_empty = ["" for _ in mode_matched]
+        keywords_empty[:len(keywords)] = keywords
+        keyword_groups = [list(x) for x in set(permutations(keywords_empty, len(keywords_empty)))]
+    else:
+        keyword_groups = [keywords]
+    print(keyword_groups)
+    gen_templates = [t for kw in keyword_groups for t in generate_templates(kw, mode_keyword_max_nums, mode_mask_max_nums, mode_mask_min_nums, mode, mode_match_index)]
+    print(gen_templates)
+    try:
+        word_template = choice(gen_templates)
+    except IndexError as e:
+        raise Exception("无法按照给定的约束和关键词填入模板。请尝试缩减关键词字数，拆分关键词，或者使用rand选项来允许无序填入模板。")#traceback.format_exc())
+    if ban_self:
+        extra = tokenizer.tokenize(word_template)
+    else:
+        extra = []
+    word_template = word_template
+    return fill_mask(word_template, banned_words=extra, unique=unique, top_k=top_k, **kwargs)
+
+import re
+alphanums = re.compile("[a-zA-Z0-9]+")
+
+def generate_templates(keywords, mode_keyword_max_nums, mode_mask_max_nums, mode_mask_min_nums, mode, mode_match_index):
+    keyword_lens = [len(alphanums.sub("#", x)) for x in keywords]
     valid_parts = list(partition_indexes(len(mode_keyword_max_nums) - 1, len(keywords), allow_zero=False))
     print(valid_parts)
     if not valid_parts:
@@ -262,12 +289,7 @@ def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, **
         for index, part in zip(mode_match_index, all_gen):
             template[index] = part
         gen_templates.append("".join(template))
-    extra = []
-    word_template = choice(gen_templates)
-    if ban_self:
-        extra = tokenizer.tokenize(word_template)
-    word_template = word_template
-    return fill_mask(word_template, banned_words=extra, unique=unique, top_k=top_k, **kwargs)
+    return gen_templates
 
 # @st.cache(allow_output_mutation=True)
 
@@ -313,17 +335,33 @@ def make_sentences_serve():
     text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")])
     return "%s %s" % (text, score)
 
+@app.errorhandler(500)
+def handle_internal_server_error(e):
+    return f"{e}", 500
+
+
+
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
     top_k = int(request.args.get('rand_top', '16'))
     template = request.args.get('template', "5，7，5。")
     unique_mode = request.args.get('mode', "soft")
     top_rate = float(request.args.get('top_rate', "0.99"))
+    rand = {"on": True, "off": False}[request.args.get('rand', "off")]
+    
     ban_self = unique_mode == "hard"
     unique = unique_mode == "hard"
     soft_unique = unique_mode == "soft"
 
-    text, score = make_sentence(template, [x for x in request.args.get('keywords', '').split(",")], ban_self=ban_self, unique=unique, top_k=top_k, soft_unique=soft_unique, top_rate=top_rate)
+    text, score = make_sentence(
+        template, [x for x in request.args.get('keywords', '').split(",")],
+         ban_self=ban_self,
+         unique=unique, 
+         top_k=top_k, 
+         soft_unique=soft_unique, 
+         top_rate=top_rate, 
+         rand=rand,
+    )
     return "%s %s" % (text, score)
         
 @app.route('/hint', methods=['GET'])
