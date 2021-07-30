@@ -12,6 +12,10 @@ import zhon.cedict
 from random import sample, randint, choice
 from stopwordsiso import stopwords
 
+class FormatException(Exception):
+    pass
+
+
 def word_entropy(logits):
     softmaxes = xr.apply_ufunc(lambda t: -sp.log_softmax(t, axis=logits.dims.index("word")) ,logits)
     return softmaxes
@@ -251,7 +255,7 @@ def make_sentence(mode_str, keywords, ban_self=False, unique=False, top_k=16, ra
     try:
         word_template = choice(gen_templates)
     except IndexError as e:
-        raise Exception("无法按照给定的约束和关键词填入模板。请尝试缩减关键词字数，拆分关键词，或者使用rand选项来允许无序填入模板。")#traceback.format_exc())
+        raise FormatException("无法按照给定的约束和关键词填入模板。请尝试缩减关键词字数，拆分关键词，或者使用rand选项来允许无序填入模板。")#traceback.format_exc())
     if ban_self:
         extra = tokenizer.tokenize(word_template)
     else:
@@ -335,9 +339,9 @@ def make_sentences_serve():
     text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")])
     return "%s %s" % (text, score)
 
-@app.errorhandler(Exception)
+@app.errorhandler(FormatException)
 def exception_handler(e):
-    return str(e._message()), 400
+    return str(e.description), 400
 
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
