@@ -337,7 +337,7 @@ def make_sentences_serve():
 
 @app.errorhandler(500)
 def handle_internal_server_error(e):
-    return f"{e}", 500
+    return f"{e}", 400
 
 
 
