@@ -105,7 +105,20 @@ import torch
 def sparse_mul(a, S):
     return torch.mul(a.expand(S.shape).sparse_mask(S.coalesce()), S)
 
-def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, soft_unique=False, top_rate=1):
+def torch_solve(func, x, opt=torch.optim.Adam, epoch=24):
+    with torch.enable_grad():
+        x = torch.tensor(x, requires_grad=True)
+        opt = opt(lr=0.5, params=[x])
+        for _ in range(epoch):
+            opt.zero_grad()
+            result = func(x)
+            result.backward()
+            opt.step()
+            # print(x)
+        return x
+
+import math
+def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, soft_unique=False, top_rate=1):
     banned_words = list(banned_words) + extra_ban()
     filter_ids = tokenizer.convert_tokens_to_ids(banned_words)
     special_ids = tokenizer.convert_tokens_to_ids(list(tokenizer.special_tokens_map.values()))
@@ -113,6 +126,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, s
     i = 1
     mask_str = tokenizer.special_tokens_map["mask_token"]
     mask_token_id = tokenizer.convert_tokens_to_ids(mask_str)
+    seq_id = None
     with torch.no_grad():
         while "[MASK]" in text:
             filter_ids = tokenizer.convert_tokens_to_ids(banned_words)
@@ -120,6 +134,29 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, s
             tokenized_batch = tokenizer([text])
             logits = model(**tokenized_batch.convert_to_tensors("pt"))
             logits = logits.logits[0] # pick first item, only one
+
+            """
+            temperature = torch.ones((logits.shape[0], 1))
+            thr = math.log(0.8)
+            def temperature_equation(temp):
+                temp = torch.nn.functional.sigmoid(temp)
+                logits_mod = temp * logits
+                softmaxed = torch.nn.functional.log_softmax(logits_mod, 1)
+                max_item = softmaxed.max(axis=1).values
+                delta = torch.clip(max_item - thr, 0)
+                return delta.sum()  
+            temp = torch_solve(
+                temperature_equation,
+                temperature
+            )
+            """
+
+            thr = math.log(0.8)
+            temp = torch.clamp(torch.nn.functional.log_softmax(logits, 1).max(axis=1).values / thr, min=0, max=1)
+            temp = temp.unsqueeze(-1)
+            print(temp.flatten())
+            logits = logits * temp
+
             neg_inf = logits.min() - 10000000 # margin
             print("neg inf", neg_inf)
             mask_location_pt = tokenized_batch.convert_to_tensors("pt").input_ids[0] == mask_token_id
@@ -132,12 +169,15 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, s
             topk_i_ind[:, :] = torch.arange(topk_i_ind.shape[0]).unsqueeze(-1)
             topk_coo = torch.stack([topk_i_ind.view(-1), topk.indices.view(-1)])
             logits = torch.sparse_coo_tensor(topk_coo, topk.values.view(-1), logits.shape) # clip logits to top-k
+            # logits = sparse_mul(temp, logits)
             logits = torch.sparse.log_softmax(logits, 1) # softmax it
-            
+
             decreased_by_word_pow = torch.bincount(tokenized_batch.convert_to_tensors("pt").input_ids[0], minlength=logits.shape[-1]).unsqueeze(0) + 1
 
             if soft_unique:
-                print(logits.shape, "*", decreased_by_word_pow.shape)
+                if seq_id is not None:
+                    seq_pow = torch.abs(torch.arange(logits.shape[0]) - seq_id).unsqueeze(-1)
+                    decreased_by_word_pow = seq_pow @ decreased_by_word_pow
                 logits = sparse_mul(decreased_by_word_pow, logits) # make word with n-count P(word) ^ n, which is equalivant to n * log(P(word))
                 logits = torch.sparse.log_softmax(logits, 1) # re-softmax the logits
 
@@ -147,7 +187,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=16, s
             ent_index_sr_is_mask = pd.Series(ent_index_sr.index.get_level_values(0)).isin(mask_location_pt_where.detach().numpy()).values
             ent_index_sr = ent_index_sr[ent_index_sr_is_mask]
             top_k_val = ent_index_sr.sort_values(ascending=False)
-            if top_rate < 1:
+            if top_rate < 0: 
                 exp_item = np.exp(top_k_val)
                 exp_item_rate = exp_item / exp_item.max()
                 exp_item_mask = exp_item_rate >= 1 - top_rate
@@ -339,9 +379,13 @@ def make_sentences_serve():
     text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")])
     return "%s %s" % (text, score)
 
-@app.errorhandler(Exception)
-def exception_handler(e):
-    return str(e), 400
+import os
+if str(os.environ["FLASK_DEBUG"]) == "1":
+    pass
+else:
+    @app.errorhandler(Exception)
+    def exception_handler(e):
+        return str(e), 400
 
 # @app.errorhandler(500)
 # def exception_handler(e):
