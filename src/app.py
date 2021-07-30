@@ -341,7 +341,7 @@ def make_sentences_serve():
 
 @app.errorhandler(FormatException)
 def exception_handler(e):
-    return str(e.description), 400
+    return str(e), 400
 
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
