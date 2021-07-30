@@ -335,11 +335,9 @@ def make_sentences_serve():
     text, score = make_sentence([5,7,5], [x for x in request.args.get('keywords', '').split(",")])
     return "%s %s" % (text, score)
 
-@app.errorhandler(500)
-def handle_internal_server_error(e):
-    return f"{e}", 400
-
-
+@app.errorhandler(Exception)
+def exception_handler(e):
+    return str(e._message()), 400
 
 @app.route('/no_self', methods=['GET'])
 def make_sentences_no_self():
