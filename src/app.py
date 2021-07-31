@@ -98,6 +98,8 @@ def extra_ban():
 # """) for c in x)]
 
     banned_words = [x for x in tokens if x not in set(zhon.cedict.all)] + ["、"]
+    sensitive_words = ["共产党"]
+    banned_words += list(set("".join(sensitive_words)))
     return banned_words
 import torch
 
