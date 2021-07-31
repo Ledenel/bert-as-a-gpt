@@ -118,7 +118,7 @@ def torch_solve(func, x, opt=torch.optim.Adam, epoch=24):
         return x
 
 import math
-def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, soft_unique=False, top_rate=1):
+def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, soft_unique=False, top_rate=1, debug=False):
     banned_words = list(banned_words) + extra_ban()
     filter_ids = tokenizer.convert_tokens_to_ids(banned_words)
     special_ids = tokenizer.convert_tokens_to_ids(list(tokenizer.special_tokens_map.values()))
@@ -218,7 +218,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, s
             # text = "".join(str(x) for x in text.data)
             i += 1
     ent.sort()
-    return text, " ".join('{}{}{:.3}'.format(*x[1:]) for x in ent)
+    return text, " ".join('{}{}{:.3}'.format(*x[1:]) for x in ent) if debug else "——damebot"
 
 import itertools
 
@@ -422,7 +422,8 @@ def make_sentences_no_self():
     unique_mode = request.args.get('mode', "soft")
     top_rate = float(request.args.get('top_rate', "0.99"))
     rand = {"on": True, "off": False}[request.args.get('rand', "off")]
-    
+    debug = {"on": True, "off": False}[request.args.get('debug', "off")]
+
     ban_self = unique_mode == "hard"
     unique = unique_mode == "hard"
     soft_unique = unique_mode == "soft"
@@ -435,6 +436,7 @@ def make_sentences_no_self():
          soft_unique=soft_unique, 
          top_rate=top_rate, 
          rand=rand,
+         debug=debug,
     )
     return "%s %s" % (text, score)
         
