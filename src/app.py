@@ -152,8 +152,7 @@ def fill_mask(text, banned_words=(), allowed_words=(), unique=False, top_k=64, s
                 temperature
             )
             """
-
-            thr = math.log(0.99)
+            thr = math.log(0.99) 
             temp = torch.clamp(torch.nn.functional.log_softmax(logits, 1).max(axis=1).values / thr, min=0, max=1)
             temp = temp.unsqueeze(-1)
             print(temp.flatten())
